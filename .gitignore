@@ -1,0 +1,6 @@
+.venv/
+model/
+data/
+__pycache__/
+.playwright-mcp/
+backups/

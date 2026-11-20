@@ -1,0 +1,36 @@
+app = "minififty"
+primary_region = "fra"
+
+[build]
+
+# The whole history of thoughts lives here and survives deploys and restarts.
+[mounts]
+  source = "thoughts"
+  destination = "/app/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # There must be exactly one mind: never more than one machine.
+  # It sleeps when nobody is watching and wakes when someone opens the page.
+  # For a mind that never sleeps: auto_stop_machines = "off", min_machines_running = 1.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 800
+    hard_limit = 1000
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/history?limit=1"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "40s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

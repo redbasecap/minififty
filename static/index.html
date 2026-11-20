@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>minififty — a small mind thinking about life</title>
+<meta name="description" content="One 50-million-parameter language model, thinking about the reason for life in an endless loop. Everyone watches the same mind.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0b0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ef7a3c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0b0f;
+    --ink-2: #12141b;
+    --paper: #f1e7d2;
+    --paper-dim: #f1e7d28f;
+    --paper-faint: #f1e7d240;
+    --rule: #f1e7d21c;
+    --ember: #ef7a3c;
+    --serif: "Cormorant Garamond", "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "DM Mono", ui-monospace, Menlo, monospace;
+    --gutter: 7.5rem;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ink); color: var(--paper); scrollbar-color: #f1e7d230 transparent; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: var(--serif);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* candle glow + grain */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(60rem 34rem at 50% 108%, #ef7a3c26, transparent 70%),
+      radial-gradient(40rem 30rem at 8% -10%, #3b4a7a22, transparent 70%);
+    animation: breathe 9s ease-in-out infinite;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: .11; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  @keyframes breathe { 50% { opacity: .55; } }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 2;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 1.5rem;
+    padding: 1.1rem 1.75rem 2.4rem;
+    background: linear-gradient(var(--ink) 45%, transparent);
+    font-family: var(--mono); font-weight: 300; font-size: .72rem;
+    letter-spacing: .09em; text-transform: uppercase; color: var(--paper-dim);
+  }
+  header h1 {
+    margin: 0; font: italic 500 1.55rem/1 var(--serif);
+    letter-spacing: 0; text-transform: none; color: var(--paper);
+  }
+  header h1 small { font: 300 .68rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--paper-dim); margin-left: .8rem; }
+  #stats { display: flex; gap: 1.6rem; white-space: nowrap; }
+  #stats b { font-weight: 400; color: var(--paper); }
+  #stats .live-dot { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: var(--ember); margin-right: .5rem; box-shadow: 0 0 .6rem var(--ember); animation: pulse 2.4s ease-in-out infinite; }
+  #stats.offline .live-dot { background: var(--paper-faint); box-shadow: none; animation: none; }
+
+  main {
+    position: relative; z-index: 1;
+    max-width: 54rem; margin: 0 auto;
+    padding: 7.5rem 1.75rem 38vh;
+  }
+  #top {
+    margin: 0 0 3.5rem var(--gutter); min-height: 1.5rem;
+    font: 300 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--paper-faint);
+  }
+  article {
+    display: grid; grid-template-columns: var(--gutter) 1fr;
+    margin: 0 0 2.1rem;
+    animation: arrive .9s ease both;
+  }
+  article .meta {
+    padding-top: .62rem;
+    font: 300 .68rem/1.5 var(--mono); letter-spacing: .08em; color: var(--paper-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  article .meta .no { display: block; color: var(--paper-dim); }
+  article p {
+    margin: 0; padding-left: 1.4rem; border-left: 1px solid var(--rule);
+    font-size: 1.5rem; line-height: 1.42; color: var(--paper-dim);
+    text-wrap: pretty; overflow-wrap: anywhere;
+    transition: color 2.5s ease, border-color 2.5s ease;
+  }
+  article p .seed { font-style: italic; color: var(--paper-faint); transition: color 2.5s ease; }
+  article.live p { color: var(--paper); border-left-color: var(--ember); }
+  article.live p .seed { color: #f1e7d2a8; }
+  article.live .meta .no { color: var(--ember); }
+  article .role { display: block; margin-top: .15rem; color: var(--paper-faint); text-transform: uppercase; letter-spacing: .14em; font-size: .6rem; }
+  /* an inquiry opens with its question… */
+  article.s-question { margin-top: 5rem; }
+  article.s-question:first-child { margin-top: 0; }
+  article.s-question p { font-size: 2.05rem; line-height: 1.22; font-style: italic; color: var(--paper); border-left-color: transparent; padding-bottom: .2rem; }
+  article.s-question .role, article.s-therefore .role, article.live .role { color: var(--ember); }
+  /* …and closes with its conclusion */
+  article.s-therefore p { color: #f1e7d2d9; border-left-color: #ef7a3c80; }
+  .aside { padding-left: 1.4rem; margin-top: .55rem; font: 300 .66rem/1.6 var(--mono); letter-spacing: .08em; color: var(--paper-faint); }
+  .aside summary { cursor: pointer; text-transform: uppercase; list-style: none; width: fit-content; }
+  .aside summary::-webkit-details-marker { display: none; }
+  .aside summary::before { content: "+ "; color: var(--ember); }
+  .aside[open] summary::before { content: "– "; }
+  .aside summary:hover { color: var(--paper); }
+  .aside ul { margin: .5rem 0 0; padding: 0; list-style: none; }
+  .aside li { font: 400 1.08rem/1.4 var(--serif); letter-spacing: 0; color: var(--paper-faint); text-decoration: line-through; text-decoration-color: #f1e7d230; margin-bottom: .45rem; }
+  .aside a { color: inherit; text-underline-offset: .2em; cursor: pointer; }
+  .aside a:hover { color: var(--ember); }
+  .recall { text-transform: uppercase; }
+  article.flash p { color: var(--paper); border-left-color: var(--ember); transition: none; }
+  .w { animation: word .7s ease both; }
+  .caret, #idle i {
+    display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
+    background: var(--ember); box-shadow: 0 0 .9rem .1rem #ef7a3c99;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .caret { margin-left: .45rem; vertical-align: .12em; }
+  #idle { margin-left: var(--gutter); padding-left: 1.4rem; height: 2rem; display: none; align-items: center; gap: .9rem;
+    font: 300 .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--paper-faint); }
+  #idle.on { display: flex; }
+
+  @keyframes arrive { from { opacity: 0; transform: translateY(.6rem); } }
+  @keyframes word { from { opacity: 0; filter: blur(4px); } }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.8); } }
+
+  #jump {
+    position: fixed; bottom: 1.6rem; left: 50%; translate: -50% 0; z-index: 4;
+    padding: .6rem 1.1rem; border: 1px solid var(--ember); border-radius: 99px;
+    background: var(--ink-2); color: var(--paper); cursor: pointer;
+    font: 400 .7rem var(--mono); letter-spacing: .1em; text-transform: uppercase;
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  #jump.on { opacity: 1; pointer-events: auto; }
+  #jump:hover { background: var(--ember); color: var(--ink); }
+
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 2; pointer-events: none;
+    padding: 2.5rem 1.75rem .9rem; background: linear-gradient(transparent, var(--ink) 70%);
+    font: 300 .66rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--paper-faint);
+    display: flex; justify-content: space-between; gap: 1rem;
+  }
+
+  @media (max-width: 720px) {
+    :root { --gutter: 0rem; }
+    header { flex-direction: column; gap: .5rem; padding: .9rem 1.1rem 1.6rem; background: linear-gradient(var(--ink) 72%, transparent); }
+    footer span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    header h1 small { display: none; }
+    #stats { gap: 1rem; font-size: .62rem; flex-wrap: wrap; }
+    #stats .hide-s { display: none; }
+    main { padding: 7.5rem 1.1rem 36vh; }
+    article { display: block; }
+    article .meta { padding: 0 0 .35rem; }
+    article .meta .no { display: inline; margin-right: .8rem; }
+    article p { font-size: 1.28rem; padding-left: 1rem; }
+    article .role { display: inline; margin-left: .8rem; }
+    article.s-question { margin-top: 3.5rem; }
+    article.s-question p { font-size: 1.6rem; }
+    .aside { padding-left: 1rem; }
+    #idle { padding-left: 1rem; }
+    footer span:last-child { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>minififty <small>one small mind, asking why</small></h1>
+  <div id="stats" class="offline">
+    <span><span class="live-dot"></span><b id="s-status">waking</b></span>
+    <span>thoughts <b id="s-thoughts">—</b></span>
+    <span class="hide-s">inquiries <b id="s-inquiries">—</b></span>
+    <span class="hide-s">awake <b id="s-since">—</b></span>
+    <span>watching <b id="s-viewers">—</b></span>
+  </div>
+</header>
+
+<main>
+  <div id="top"></div>
+  <section id="log" aria-live="polite"></section>
+  <div id="idle"><i></i><span id="phase">gathering the next thought</span></div>
+</main>
+
+<button id="jump" type="button">↓ back to the present</button>
+<footer>
+  <span>mini-llm · 50,049,408 parameters · a single shared instance</span>
+  <span>question → perhaps → because → but → therefore · scroll up for everything it has ever thought</span>
+</footer>
+
+<script>
+const PAGE = 100;
+const $ = id => document.getElementById(id);
+const log = $("log"), topEl = $("top"), idle = $("idle"), jump = $("jump");
+const scroller = document.scrollingElement;
+
+let oldestId = null;      // lowest thought id rendered
+let reachedStart = false;
+let loadingOlder = false;
+let live = null;          // {id, el, p, shown, caret}
+let ready = false;        // history for the current connection has been rendered
+let pending = [];         // stream events that arrived before `ready`
+let since = null;
+
+const nearBottom = () => scroller.scrollHeight - scroller.scrollTop - innerHeight < 220;
+const toBottom = (smooth) => scroller.scrollTo({ top: scroller.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+
+function stamp(ts) {
+  const d = new Date(ts * 1000), now = new Date();
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  if (d.toDateString() === now.toDateString()) return time;
+  return d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" }) + " " + time;
+}
+
+function ago(ts) {
+  let s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return Math.round(s) + "s";
+  if (s < 5400) return Math.round(s / 60) + "m";
+  if (s < 172800) return (s / 3600).toFixed(1) + "h";
+  return Math.round(s / 86400) + "d";
+}
+
+// All model output goes through textContent — never innerHTML.
+function fill(p, thought) {
+  p.textContent = "";
+  const text = thought.text, seed = thought.seed || "";
+  if (seed && thought.step !== "question" && text.startsWith(seed)) {
+    const s = document.createElement("span");
+    s.className = "seed"; s.textContent = seed;
+    p.append(s, text.slice(seed.length));
+  } else {
+    p.append(text);
+  }
+}
+
+const ROLES = { question: "question", perhaps: "perhaps", because: "because", but: "but", then: "then", therefore: "∴ therefore" };
+
+function goTo(id) {
+  const el = log.querySelector(`[data-id="${id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1800);
+}
+
+// What lies behind a thought: the memories it drew on and the drafts it set aside.
+function asides(body, thought) {
+  body.querySelectorAll(".aside").forEach(a => a.remove());
+  if (thought.recalls && thought.recalls.length) {
+    const r = document.createElement("div");
+    r.className = "aside recall";
+    r.append(thought.recalls.length > 1 ? "returning to the root, recalling " : "raised by ");
+    thought.recalls.forEach((id, i) => {
+      const a = document.createElement("a");
+      a.textContent = "№ " + String(id).padStart(5, "0");
+      a.addEventListener("click", () => goTo(id));
+      r.append(i ? ", " : "", a);
+    });
+    body.append(r);
+  }
+  if (thought.rejected && thought.rejected.length) {
+    const d = document.createElement("details");
+    d.className = "aside";
+    const sum = document.createElement("summary");
+    sum.textContent = `chosen from ${thought.rejected.length + 1} drafts`;
+    const ul = document.createElement("ul");
+    for (const text of thought.rejected) { const li = document.createElement("li"); li.textContent = text; ul.append(li); }
+    d.append(sum, ul);
+    body.append(d);
+  }
+}
+
+function build(thought) {
+  const el = document.createElement("article");
+  el.dataset.id = thought.id;
+  if (thought.step) el.classList.add("s-" + thought.step);
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const no = document.createElement("span");
+  no.className = "no"; no.textContent = "№ " + String(thought.id).padStart(5, "0");
+  const t = document.createElement("time");
+  t.textContent = stamp(thought.ts);
+  t.dateTime = new Date(thought.ts * 1000).toISOString();
+  meta.append(no, t);
+  if (ROLES[thought.step]) {
+    const role = document.createElement("span");
+    role.className = "role"; role.textContent = ROLES[thought.step];
+    meta.append(role);
+  }
+  const body = document.createElement("div");
+  const p = document.createElement("p");
+  fill(p, thought);
+  body.append(p);
+  asides(body, thought);
+  el.append(meta, body);
+  return { el, p, body };
+}
+
+function setStats(stats) {
+  if (!stats) return;
+  $("s-thoughts").textContent = stats.thoughts.toLocaleString();
+  $("s-inquiries").textContent = (stats.inquiries || 0).toLocaleString();
+  since = stats.since;
+  $("s-since").textContent = since ? ago(since) : "just now";
+}
+setInterval(() => { if (since) $("s-since").textContent = ago(since); }, 30000);
+
+function startLive(thought) {
+  endLive();
+  const stick = nearBottom();
+  const { el, p, body } = build(thought);
+  el.classList.add("live");
+  const caret = document.createElement("span");
+  caret.className = "caret";
+  p.append(caret);
+  log.append(el);
+  live = { id: thought.id, el, p, body, caret, shown: thought.text, seed: thought.seed, step: thought.step };
+  idle.classList.remove("on");
+  if (stick) toBottom(true);
+}
+
+function updateLive(text) {
+  if (!live) return;
+  const stick = nearBottom();
+  if (text.startsWith(live.shown)) {
+    const add = text.slice(live.shown.length);
+    if (add) {
+      const w = document.createElement("span");
+      w.className = "w"; w.textContent = add;
+      live.caret.before(w);
+    }
+  } else {            // the tidy-up rewrote earlier characters: redraw
+    fill(live.p, { text, seed: live.seed, step: live.step });
+    live.p.append(live.caret);
+  }
+  live.shown = text;
+  if (stick) toBottom(false);
+}
+
+function endLive(thought) {
+  if (!live) return;
+  if (thought) { fill(live.p, thought); asides(live.body, thought); live.el.classList.remove("live"); }
+  else live.el.remove();
+  live.caret.remove();
+  live = null;
+  idle.classList.add("on");
+}
+
+function setPhase(label) {
+  const stick = nearBottom();
+  $("phase").textContent = label || "gathering the next thought";
+  if (stick) toBottom(false);
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "start": startLive(ev.thought); break;
+    case "text": if (live && live.id === ev.id) updateLive(ev.text); break;
+    case "end":
+      if (live && live.id === ev.thought.id) endLive(ev.thought);
+      else if (!log.querySelector(`[data-id="${ev.thought.id}"]`)) log.append(build(ev.thought).el);
+      setStats(ev.stats);
+      break;
+    case "discard": if (live && live.id === ev.id) endLive(); break;
+    case "phase": setPhase(ev.label); break;
+  }
+}
+
+async function fetchPage(before) {
+  const q = new URLSearchParams({ limit: PAGE });
+  if (before != null) q.set("before", before);
+  const r = await fetch("/api/history?" + q);
+  if (!r.ok) throw new Error("history " + r.status);
+  return r.json();
+}
+
+function markStart() {
+  reachedStart = true;
+  topEl.textContent = oldestId === null ? "nothing has been thought yet" : "— here the thinking began —";
+}
+
+// (Re)sync with the server: called for every snapshot, i.e. on connect and reconnect.
+async function sync(snap) {
+  ready = false; pending = [];
+  const thoughts = await fetchPage(snap.next_id);
+  log.textContent = ""; live = null; reachedStart = false; topEl.textContent = "";
+  for (const t of thoughts) log.append(build(t).el);
+  oldestId = thoughts.length ? thoughts[0].id : null;
+  if (thoughts.length < PAGE) markStart();
+  setStats(snap.stats);
+  setPhase(snap.phase);
+  if (snap.current) startLive(snap.current); else idle.classList.add("on");
+  toBottom(false);
+  ready = true;
+  pending.splice(0).forEach(handle);
+}
+
+async function loadOlder() {
+  if (!ready || loadingOlder || reachedStart || oldestId === null) return;
+  loadingOlder = true;
+  topEl.textContent = "remembering…";
+  try {
+    const thoughts = await fetchPage(oldestId);
+    const before = scroller.scrollHeight;
+    const frag = document.createDocumentFragment();
+    for (const t of thoughts) frag.append(build(t).el);
+    log.prepend(frag);
+    scroller.scrollTop += scroller.scrollHeight - before;   // keep the reader's place
+    if (thoughts.length) oldestId = thoughts[0].id;
+    topEl.textContent = "";
+    if (thoughts.length < PAGE) markStart();
+  } catch (e) {
+    topEl.textContent = "could not load earlier thoughts — scroll to retry";
+  } finally {
+    loadingOlder = false;
+  }
+}
+new IntersectionObserver(es => { if (es[0].isIntersecting) loadOlder(); }, { rootMargin: "600px 0px 0px 0px" }).observe(topEl);
+
+addEventListener("scroll", () => jump.classList.toggle("on", !nearBottom()), { passive: true });
+jump.addEventListener("click", () => toBottom(true));
+
+function connect() {
+  const es = new EventSource("/api/stream");
+  es.onopen = () => { $("stats").classList.remove("offline"); $("s-status").textContent = "thinking"; };
+  es.onerror = () => { $("stats").classList.add("offline"); $("s-status").textContent = "reconnecting"; };
+  es.onmessage = m => {
+    const ev = JSON.parse(m.data);
+    if (ev.type === "viewers") { $("s-viewers").textContent = ev.count.toLocaleString(); return; }
+    if (ev.type === "snapshot") { sync(ev).catch(() => { es.close(); setTimeout(connect, 3000); }); return; }
+    if (ready) handle(ev); else pending.push(ev);
+  };
+}
+connect();
+</script>
+</body>
+</html>
