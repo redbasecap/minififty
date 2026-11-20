@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>brain — minififty</title>
+<meta name="description" content="Every concept the mind uses and every connection between them, plus what it currently believes and what it has learned about its own thinking.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0b0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ef7a3c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0b0f; --ink-2: #10121899; --paper: #f1e7d2; --paper-dim: #f1e7d2b0; --paper-faint: #f1e7d255;
+    --rule: #f1e7d21c; --ember: #ef7a3c; --panel: 21rem;
+    --serif: "Cormorant Garamond", "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "DM Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  html { background: var(--ink); color: var(--paper); scrollbar-color: #f1e7d230 transparent; }
+  body { margin: 0; font-family: var(--serif); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(60rem 34rem at 60% 108%, #ef7a3c1c, transparent 70%),
+                radial-gradient(40rem 30rem at 8% -10%, #3b4a7a22, transparent 70%);
+  }
+  a { color: inherit; text-decoration-color: var(--ember); text-underline-offset: .22em; }
+  a:hover { color: var(--ember); }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3; display: flex; justify-content: space-between; align-items: baseline;
+    padding: 1.1rem 1.75rem; font: 300 .72rem var(--mono); letter-spacing: .09em; text-transform: uppercase; pointer-events: none;
+  }
+  nav a { pointer-events: auto; }
+  nav .name { font: italic 500 1.55rem/1 var(--serif); letter-spacing: 0; text-transform: none; text-decoration: none; }
+  nav .name small { font: 300 .68rem var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--paper-dim); margin-left: .8rem; }
+  nav .links { display: flex; gap: 1.6rem; color: var(--paper-dim); }
+  nav .live::before { content: ""; display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; margin-right: .55rem;
+    background: var(--ember); box-shadow: 0 0 .6rem var(--ember); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.8); } }
+
+  aside {
+    position: fixed; z-index: 2; top: 4.2rem; bottom: 1.2rem; width: var(--panel); overflow-y: auto;
+    padding: 1.2rem 1.3rem; background: var(--ink-2); backdrop-filter: blur(10px); border: 1px solid var(--rule);
+  }
+  #learned { left: 1.2rem; }
+  #detail { right: 1.2rem; opacity: 0; pointer-events: none; transform: translateX(1rem); transition: opacity .35s, transform .35s; }
+  #detail.on { opacity: 1; pointer-events: auto; transform: none; }
+  h2 { margin: 0 0 .8rem; font: 300 .64rem var(--mono); letter-spacing: .15em; text-transform: uppercase; color: var(--ember); }
+  section { margin-bottom: 1.9rem; }
+  section:last-child { margin-bottom: 0; }
+  .hint { font: 300 .64rem/1.6 var(--mono); letter-spacing: .06em; color: var(--paper-faint); margin: 0; }
+  ol, ul { margin: 0; padding: 0; list-style: none; }
+  .beliefs li { position: relative; padding: 0 0 .8rem 2.6rem; font-size: 1.12rem; line-height: 1.35; color: var(--paper-dim); }
+  .beliefs li b { position: absolute; left: 0; top: .28rem; font: 400 .68rem var(--mono); color: var(--ember); }
+  .beliefs a { text-decoration: none; }
+  .trend { display: flex; align-items: baseline; gap: .7rem; font: italic 400 2rem/1 var(--serif); }
+  .trend small { font: 300 .64rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--paper-faint); font-style: normal; }
+  .trend .arrow { color: var(--ember); font-style: normal; }
+  .bars li { display: grid; grid-template-columns: 1fr 5.2rem 2.2rem; align-items: center; gap: .6rem; padding: .22rem 0;
+    font: 300 .68rem var(--mono); color: var(--paper-dim); }
+  .bars i { display: block; height: 3px; background: var(--rule); position: relative; }
+  .bars i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--v); background: var(--ember); }
+  .bars span:last-child { text-align: right; color: var(--paper-faint); }
+  .bars .role { color: var(--paper-faint); }
+  #detail h3 { margin: 0 0 .2rem; font: italic 400 2.3rem/1.1 var(--serif); }
+  #detail .count { font: 300 .66rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--paper-faint); margin-bottom: 1.4rem; }
+  .links { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .links button { border: 1px solid var(--rule); background: none; color: var(--paper-dim); cursor: pointer; padding: .25rem .55rem;
+    font: 300 .66rem var(--mono); letter-spacing: .06em; }
+  .links button:hover { border-color: var(--ember); color: var(--paper); }
+  .links button sup { color: var(--ember); margin-left: .3rem; }
+  .thoughts li { padding: 0 0 .75rem; font-size: 1.05rem; line-height: 1.35; color: var(--paper-dim); }
+  .thoughts li small { display: block; font: 300 .6rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--paper-faint); }
+  .thoughts mark { background: none; color: var(--ember); }
+  #close { position: absolute; top: .7rem; right: .8rem; border: 0; background: none; color: var(--paper-faint); cursor: pointer; font: 300 1rem var(--mono); }
+  #legend { position: fixed; z-index: 2; bottom: 1.2rem; left: calc(var(--panel) + 2.6rem); font: 300 .64rem var(--mono); letter-spacing: .09em;
+    text-transform: uppercase; color: var(--paper-faint); }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    canvas { position: relative; display: block; height: 70vh; inset: auto; }
+    aside { position: relative; inset: auto; width: auto; margin: 0 1rem 1rem; }
+    #detail { display: none; opacity: 1; transform: none; } #detail.on { display: block; }
+    #legend { display: none; }
+    nav { padding: .9rem 1.1rem; } nav .name small { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<nav>
+  <a class="name" href="/">minififty <small>the brain</small></a>
+  <span class="links"><a class="live" href="/">watch it think</a><a href="/about">about</a></span>
+</nav>
+
+<canvas id="graph" aria-label="Map of the concepts the mind uses and how they connect"></canvas>
+
+<aside id="learned">
+  <section>
+    <h2>What it holds true</h2>
+    <ol class="beliefs" id="beliefs"></ol>
+    <p class="hint" id="beliefs-hint">The conclusions it graded highest. A new one replaces the weakest when it scores better.</p>
+  </section>
+  <section>
+    <h2>Is it improving?</h2>
+    <div class="trend" id="trend"></div>
+    <p class="hint" id="trend-hint"></p>
+  </section>
+  <section>
+    <h2>How it prefers to think</h2>
+    <ul class="bars" id="openers"></ul>
+    <p class="hint">Average grade of the inquiries each opening was used in. It reaches for the better ones more often.</p>
+  </section>
+</aside>
+
+<aside id="detail">
+  <button id="close" type="button" aria-label="Close">×</button>
+  <h3 id="d-word"></h3>
+  <div class="count" id="d-count"></div>
+  <section><h2>Connected to</h2><div class="links" id="d-links"></div></section>
+  <section><h2>Recent thoughts</h2><ul class="thoughts" id="d-thoughts"></ul></section>
+</aside>
+
+<div id="legend">a dot is a concept · a line joins two that met in one thought · click a dot</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const cv = $("graph"), ctx = cv.getContext("2d");
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const nodes = new Map();
+let edges = [], W = 0, H = 0, hover = null, selected = null, neighbours = new Set();
+const norm = w => w.length > 4 && w.endsWith("ies") ? w.slice(0, -3) + "y"
+  : (w.length > 4 && w.endsWith("s") && !/(ss|us|is)$/.test(w) ? w.slice(0, -1) : w);
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2), r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+// The graph centres on the space the left panel leaves free.
+const centre = () => innerWidth > 900
+  ? [(21 * 16 + 20 + W - ($("detail").classList.contains("on") ? 21 * 16 + 20 : 0)) / 2, H / 2 + 10] : [W / 2, H / 2];
+
+async function loadGraph() {
+  let g;
+  try { g = await (await fetch("/api/mind?full=1")).json(); } catch (e) { return; }
+  const keep = new Set(g.nodes.map(n => n.word)), [cx, cy] = centre();
+  for (const w of nodes.keys()) if (!keep.has(w)) nodes.delete(w);
+  g.nodes.forEach((n, i) => {
+    const old = nodes.get(n.word);
+    if (old) { if (n.count > old.count) old.heat = 1; old.count = n.count; old.rank = i; return; }
+    const a = Math.random() * 6.283, d = 80 + Math.random() * Math.min(W, H) * .4;
+    nodes.set(n.word, { word: n.word, count: n.count, rank: i, heat: nodes.size ? 1 : 0, born: performance.now(),
+      x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, vx: 0, vy: 0 });
+  });
+  edges = g.edges.map(e => ({ a: nodes.get(e.a), b: nodes.get(e.b), weight: e.weight })).filter(e => e.a && e.b);
+  setNeighbours();
+  if (still) { for (let i = 0; i < 400; i++) step(); draw(); }
+}
+
+function setNeighbours() {
+  const focus = hover || selected;
+  neighbours = new Set();
+  if (!focus) return;
+  for (const e of edges) { if (e.a === focus) neighbours.add(e.b); if (e.b === focus) neighbours.add(e.a); }
+}
+
+function touch(text, amount = 1) {
+  for (const w of (text.toLowerCase().match(/[a-z]{4,}/g) || [])) {
+    const n = nodes.get(norm(w));
+    if (n) n.heat = Math.max(n.heat, amount);
+  }
+}
+
+function step() {
+  const list = [...nodes.values()], [cx, cy] = centre();
+  const left = innerWidth > 900 ? 21 * 16 + 50 : 20;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    for (let j = i + 1; j < list.length; j++) {
+      const b = list[j];
+      let dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy + 60;
+      if (d2 > 90000) continue;
+      const f = 1500 / d2, d = Math.sqrt(d2);
+      dx /= d; dy /= d;
+      a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
+    }
+    a.vx += (cx - a.x) * .0009; a.vy += (cy - a.y) * .0016;
+    if (a.x < left) a.vx += .5; if (a.x > W - 70) a.vx -= .5;
+    if (a.y < 80) a.vy += .5; if (a.y > H - 40) a.vy -= .5;
+  }
+  for (const e of edges) {
+    const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = (d - 95) * .0011 * Math.min(e.weight, 4);
+    e.a.vx += dx / d * f; e.a.vy += dy / d * f; e.b.vx -= dx / d * f; e.b.vy -= dy / d * f;
+  }
+  const t = performance.now() / 1000;
+  for (const n of list) {
+    n.vx += Math.sin(t * .3 + n.word.length * 1.7) * .004;
+    n.vy += Math.cos(t * .26 + n.word.charCodeAt(0)) * .004;
+    n.vx *= .88; n.vy *= .88;
+    n.x += Math.max(-5, Math.min(5, n.vx)); n.y += Math.max(-5, Math.min(5, n.vy));
+    n.heat *= .99;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  const now = performance.now(), focus = hover || selected;
+  for (const e of edges) {
+    const lit = focus && (e.a === focus || e.b === focus);
+    const heat = Math.min(e.a.heat, e.b.heat);
+    const age = Math.min(1, (now - Math.max(e.a.born, e.b.born)) / 2000);
+    if (lit) ctx.strokeStyle = `rgba(239,122,60,${.75 * age})`;
+    else if (heat > .08) ctx.strokeStyle = `rgba(239,122,60,${(.12 + heat * .5) * age * (focus ? .4 : 1)})`;
+    else ctx.strokeStyle = `rgba(241,231,210,${(.05 + .025 * Math.min(e.weight, 6)) * age * (focus ? .35 : 1)})`;
+    ctx.lineWidth = lit ? 1.2 : .6 + Math.min(e.weight, 6) * .08;
+    ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+  }
+  ctx.textBaseline = "middle";
+  for (const n of nodes.values()) {
+    const age = Math.min(1, (now - n.born) / 2000);
+    const near = !focus || n === focus || neighbours.has(n);
+    const r = 1.6 + Math.sqrt(n.count) * .85 + n.heat * 2;
+    const hot = n.heat > .08 || n === focus;
+    if (hot) {
+      ctx.fillStyle = `rgba(239,122,60,${(n === focus ? .22 : n.heat * .2) * age})`;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r * 3.6, 0, 6.3); ctx.fill();
+    }
+    ctx.fillStyle = hot ? `rgba(239,122,60,${.95 * age})` : `rgba(241,231,210,${(near ? .55 : .14) * age})`;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 6.3); ctx.fill();
+    // Always label the main concepts; the rest speak up when lit or near the focus.
+    if (n.rank < 34 || hot || (focus && near)) {
+      const big = n === focus;
+      ctx.font = `${big ? 400 : 300} ${big ? 12 : 10}px "DM Mono", ui-monospace, monospace`;
+      ctx.fillStyle = `rgba(241,231,210,${(big ? 1 : hot ? .85 : near ? (focus ? .8 : .38) : .1) * age})`;
+      ctx.fillText(n.word.toUpperCase().split("").join(" "), n.x + r + 6, n.y);
+    }
+  }
+}
+
+function frame() { step(); draw(); requestAnimationFrame(frame); }
+
+function nodeAt(ev) {
+  const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  let best = null, bd = 18 * 18;
+  for (const n of nodes.values()) {
+    const d = (n.x - x) ** 2 + (n.y - y) ** 2;
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+cv.addEventListener("mousemove", ev => { hover = nodeAt(ev); cv.style.cursor = hover ? "pointer" : "crosshair"; setNeighbours(); if (still) draw(); });
+cv.addEventListener("mouseleave", () => { hover = null; setNeighbours(); });
+cv.addEventListener("click", ev => { const n = nodeAt(ev); if (n) select(n.word); else closeDetail(); });
+$("close").addEventListener("click", closeDetail);
+function closeDetail() { selected = null; setNeighbours(); $("detail").classList.remove("on"); }
+
+async function select(word) {
+  const n = nodes.get(word);
+  if (n) { selected = n; n.heat = 1; setNeighbours(); }
+  let d;
+  try { d = await (await fetch("/api/concept?word=" + encodeURIComponent(word))).json(); } catch (e) { return; }
+  $("d-word").textContent = d.word;
+  $("d-count").textContent = `in ${d.count} thought${d.count === 1 ? "" : "s"}`;
+  const links = $("d-links"); links.textContent = "";
+  for (const l of d.links) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = l.word;
+    const sup = document.createElement("sup"); sup.textContent = l.weight;
+    b.append(sup);
+    b.addEventListener("click", () => select(l.word));
+    links.append(b);
+  }
+  const list = $("d-thoughts"); list.textContent = "";
+  for (const t of d.thoughts.reverse()) {
+    const li = document.createElement("li");
+    const small = document.createElement("small");
+    small.textContent = `№ ${String(t.id).padStart(5, "0")} · ${t.step === "search" ? "looked up" : t.step}`;
+    li.append(small);
+    // Highlight the concept inside the thought (text nodes only, never HTML).
+    for (const part of t.text.split(/([A-Za-z]+)/)) {
+      if (norm(part.toLowerCase()) === d.word) { const m = document.createElement("mark"); m.textContent = part; li.append(m); }
+      else li.append(part);
+    }
+    list.append(li);
+  }
+  $("detail").classList.add("on");
+}
+
+async function loadLearned() {
+  let L;
+  try { L = await (await fetch("/api/learned")).json(); } catch (e) { return; }
+  const beliefs = $("beliefs"); beliefs.textContent = "";
+  for (const b of L.beliefs) {
+    const li = document.createElement("li"), score = document.createElement("b");
+    score.textContent = b.score.toFixed(2);
+    li.append(score, b.text);
+    beliefs.append(li);
+  }
+  if (!L.beliefs.length) $("beliefs-hint").textContent = "Nothing yet. It grades each conclusion it reaches; the best ones will appear here.";
+  const trend = $("trend"); trend.textContent = "";
+  if (L.first != null) {
+    const mk = (v, label) => { const s = document.createElement("span"); s.textContent = v.toFixed(2); const sm = document.createElement("small"); sm.textContent = label; s.append(" ", sm); return s; };
+    const arrow = document.createElement("span"); arrow.className = "arrow"; arrow.textContent = "→";
+    trend.append(mk(L.first, "first 10"), arrow, mk(L.recent, "last 10"));
+    const diff = L.recent - L.first;
+    $("trend-hint").textContent = (Math.abs(diff) < .02 ? "About the same so far." : diff > 0 ? "Its recent conclusions grade higher than its first ones." : "Its recent conclusions grade lower than its first ones.")
+      + ` Average self-grade over ${L.scored} graded inquiries; ${L.lookups} things looked up.`;
+  } else {
+    $("trend-hint").textContent = `Too early to say: ${L.scored} of the 20 graded inquiries needed for a comparison. ${L.lookups} things looked up.`;
+  }
+  const openers = $("openers"); openers.textContent = "";
+  for (const o of L.openers.filter(o => o.uses >= 2).slice(0, 12)) {
+    const li = document.createElement("li"), name = document.createElement("span"), role = document.createElement("span");
+    role.className = "role"; role.textContent = " · " + o.role;
+    name.append(`“${o.seed}”`, role);
+    const bar = document.createElement("i"); bar.style.setProperty("--v", Math.round(o.mean * 100) + "%");
+    const val = document.createElement("span"); val.textContent = o.mean.toFixed(2);
+    li.append(name, bar, val);
+    openers.append(li);
+  }
+  if (!openers.children.length) { const li = document.createElement("li"); li.textContent = "still trying each opening"; openers.append(li); }
+}
+
+function connect() {
+  const es = new EventSource("/api/stream");
+  es.onmessage = m => {
+    const ev = JSON.parse(m.data);
+    if (ev.type === "drafts") ev.texts.forEach(t => touch(t));
+    else if (ev.type === "text") touch(ev.text);
+    else if (ev.type === "end") {
+      touch(ev.thought.text, 1);
+      loadGraph();
+      if (ev.thought.step === "therefore") loadLearned();
+    }
+  };
+}
+
+addEventListener("resize", () => { resize(); if (still) draw(); });
+resize(); loadGraph(); loadLearned(); connect();
+if (!still) requestAnimationFrame(frame);
+</script>
+</body>
+</html>

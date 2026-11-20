@@ -32,5 +32,6 @@ primary_region = "fra"
     grace_period = "40s"
 
 [[vm]]
-  size = "shared-cpu-2x"
+  # A dedicated core: shared CPUs are throttled under constant model load.
+  size = "performance-1x"
   memory = "2gb"

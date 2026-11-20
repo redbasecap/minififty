@@ -50,6 +50,14 @@ visit — see the comment in `fly.toml` to keep it thinking around the clock.
     The drafts are streamed to viewers while they are written.
   - **Concept map**: `/api/mind` returns the words the mind keeps returning to
     and which of them co-occur in a thought; the page animates it in the background.
+  - **Self-improvement**: every conclusion is graded (the model's own yes/no on
+    "is this a clear answer" plus novelty against earlier conclusions). The five
+    best non-overlapping conclusions are its beliefs and feed back into later
+    prompts; a bandit over step openers learns which ones lead to good grades.
+    The weights are never changed. `/api/learned` exposes all of it.
+  - **Lookup tool**: every second inquiry it searches Wikipedia's public API
+    for the question's key words and reads a two-sentence summary. This is the
+    only outside action; there is no shell.
   - **Memory**: each conclusion raises the next question, and every fifth
     inquiry returns to the root question while recalling three older conclusions.
 
@@ -57,6 +65,7 @@ visit — see the comment in `fly.toml` to keep it thinking around the clock.
   restarts. A lock file guarantees only one instance writes that history.
 - `server.py` — FastAPI. `/api/stream` (Server-Sent Events) broadcasts the live
   thought to all viewers; `/api/history?before=<id>` pages back through the past.
+- `static/brain.html` — full concept graph, beliefs and learned preferences (`/brain`).
 - `static/index.html` — the page; `static/about.html` — the story and how it works.
 
 Pace, sampling and chain shape (`TOKEN_DELAY`, `CANDIDATES`, `STEPS`, `REFLECT_EVERY`, …) are constants

@@ -129,6 +129,9 @@
   #drafts.decided .draft { opacity: .32; text-decoration: line-through; text-decoration-color: #f1e7d240; }
   #drafts.decided .draft.won { opacity: 1; color: var(--paper); border-left: 1px solid var(--ember); text-decoration: none; font-size: 1.5rem; }
   #drafts.decided .caret { display: none; }
+  article.s-search p { font-size: 1.12rem; color: #f1e7d28a; border-left-style: dotted; }
+  article.s-search code { display: block; margin-bottom: .45rem; font: 400 .74rem var(--mono); letter-spacing: .06em; color: var(--ember); }
+  .aside.kept { color: var(--ember); }
   .w { animation: word .7s ease both; }
   .caret, #idle i {
     display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
@@ -199,6 +202,7 @@
     <span class="hide-s">inquiries <b id="s-inquiries">—</b></span>
     <span class="hide-s">awake <b id="s-since">—</b></span>
     <span>watching <b id="s-viewers">—</b></span>
+    <a href="/brain">brain</a>
     <a href="/about">about</a>
   </div>
 </header>
@@ -252,7 +256,11 @@ function ago(ts) {
 function fill(p, thought) {
   p.textContent = "";
   const text = thought.text, seed = thought.seed || "";
-  if (seed && thought.step !== "question" && text.startsWith(seed)) {
+  if (thought.step === "search") {
+    const cmd = document.createElement("code");
+    cmd.textContent = `$ search "${seed}"`;
+    p.append(cmd, text);
+  } else if (seed && thought.step !== "question" && text.startsWith(seed)) {
     const s = document.createElement("span");
     s.className = "seed"; s.textContent = seed;
     p.append(s, text.slice(seed.length));
@@ -261,7 +269,7 @@ function fill(p, thought) {
   }
 }
 
-const ROLES = { question: "question", perhaps: "perhaps", because: "because", but: "but", then: "then", therefore: "∴ therefore" };
+const ROLES = { question: "question", search: "looked up", perhaps: "perhaps", because: "because", but: "but", then: "then", therefore: "∴ therefore" };
 
 function goTo(id) {
   const el = log.querySelector(`[data-id="${id}"]`);
@@ -285,6 +293,23 @@ function asides(body, thought) {
       r.append(i ? ", " : "", a);
     });
     body.append(r);
+  }
+  if (thought.step === "search" && thought.source) {
+    const src = document.createElement("div");
+    src.className = "aside recall";
+    const a = document.createElement("a");
+    a.textContent = "wikipedia · " + thought.source;
+    a.href = "https://en.wikipedia.org/wiki/" + encodeURIComponent(thought.source.replace(/ /g, "_"));
+    a.target = "_blank"; a.rel = "noopener noreferrer";
+    src.append("read at ", a);
+    body.append(src);
+  }
+  if (thought.score != null) {
+    const g = document.createElement("div");
+    g.className = "aside recall" + (thought.learned ? " kept" : "");
+    g.textContent = `graded itself ${thought.score.toFixed(2)} · clear ${thought.clarity.toFixed(2)} · new ${thought.novelty.toFixed(2)}`
+      + (thought.learned ? " · kept as a belief" : "");
+    body.append(g);
   }
   if (thought.rejected && thought.rejected.length) {
     const d = document.createElement("details");

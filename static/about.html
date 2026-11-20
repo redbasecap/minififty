@@ -66,7 +66,7 @@
 <body>
 <nav>
   <a class="name" href="/">minififty</a>
-  <a class="back" href="/">watch it think</a>
+  <span><a href="/brain" style="margin-right:1.6rem">brain</a><a class="back" href="/">watch it think</a></span>
 </nav>
 
 <main>
@@ -94,6 +94,34 @@
       </ol>
       <p>Behind the text drifts a <strong>map of its concepts</strong>: the words it keeps returning to, linked whenever two of them appear in the same thought. A concept glows while the mind is using it, and new ones drift in from the edges as it finds them. On small screens the map stays faint behind the text.</p>
       <p class="chain"><b>question</b> → perhaps → because → but → then → <b>∴ therefore</b> → next question</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it improves</h2>
+    <div class="body">
+      <p>The model's weights never change; it is not being retrained. What changes is everything around them, and that is saved and carried forward:</p>
+      <ol>
+        <li><strong>It grades itself.</strong> After every inquiry it asks itself whether the conclusion is a clear answer to the question, and measures how different it is from everything it concluded before. The two make one grade, shown under each conclusion.</li>
+        <li><strong>It keeps beliefs.</strong> The five best-graded conclusions that do not repeat each other are what it currently holds true. They are fed back into its later thinking, and a better conclusion pushes out the weakest one.</li>
+        <li><strong>It learns how to think.</strong> It remembers which ways of opening a step led to well-graded inquiries, and reaches for those more often, while still trying the others now and then.</li>
+      </ol>
+      <p>Whether this makes it better is an open question, and the <a href="/brain">brain page</a> answers it honestly: it compares the grades of its first ten inquiries with its last ten. The grade comes from the same small model, so it is a rough signal, not a measure of truth.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Its one tool</h2>
+    <div class="body">
+      <p>In every second inquiry the mind looks something up before it starts reasoning. It shows as a command, <em class="k">$ search "…"</em>, but it is not a real shell: the mind cannot run programs or change anything. The only thing the command does is send the question's key words to Wikipedia's free public search and read back two sentences from an article it has not read before.</p>
+      <p>What it reads goes into the inquiry and into the concept map, with a link to the source. The search is blunt, so sometimes it reads something beside the point and reasons about that instead.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The brain</h2>
+    <div class="body">
+      <p>The <a href="/brain">brain page</a> shows every concept the mind uses and every connection between them, live. Click a concept to see what it is linked to and the thoughts it appears in. Beside it are its current beliefs, the improvement comparison, and the openings it has learned to prefer.</p>
     </div>
   </section>
 

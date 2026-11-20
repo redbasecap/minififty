@@ -44,10 +44,26 @@ async def history(before: int | None = None, limit: int = Query(100, ge=1, le=50
     return state["thinker"].page(before, limit)
 
 
+@app.get("/brain")
+async def brain():
+    return FileResponse(STATIC / "brain.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/mind")
-async def mind():
+async def mind(full: bool = False):
     """Concept map: the ideas the mind keeps returning to and how it links them."""
-    return state["thinker"].mind_map()
+    return state["thinker"].mind_map(110, 320) if full else state["thinker"].mind_map()
+
+
+@app.get("/api/concept")
+async def concept(word: str = Query(..., min_length=1, max_length=40, pattern="^[a-z]+$")):
+    return state["thinker"].concept_detail(word)
+
+
+@app.get("/api/learned")
+async def learned():
+    """Beliefs it currently holds and what it has learned about its own thinking."""
+    return state["thinker"].learned()
 
 
 def sse(event: dict) -> str:
