@@ -115,6 +115,20 @@
     font: 300 .68rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ember); }
   header a, footer a { color: inherit; text-underline-offset: .25em; pointer-events: auto; }
   header a:hover, footer a:hover { color: var(--ember); }
+  #mind { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  /* the drafts being weighed, written in front of everyone */
+  #drafts { display: none; grid-template-columns: var(--gutter) 1fr; margin: 0 0 2.1rem; animation: arrive .6s ease both; }
+  #drafts.on { display: grid; }
+  #drafts .meta { padding-top: .5rem; font: 300 .6rem/1.6 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ember); }
+  #drafts .meta span { display: block; color: var(--paper-faint); }
+  .draft { position: relative; padding: .1rem 0 .1rem 1.4rem; margin-bottom: .7rem; border-left: 1px dashed #f1e7d230;
+    font-size: 1.16rem; line-height: 1.4; color: #f1e7d27a; transition: color .8s ease, opacity .8s ease, border-color .8s ease, font-size .8s ease; }
+  .draft .seed { font-style: italic; }
+  .draft .caret { width: .34rem; height: .34rem; margin-left: .35rem; }
+  .draft::before { content: attr(data-n); position: absolute; left: .45rem; top: .5rem; font: 300 .56rem var(--mono); color: var(--paper-faint); }
+  #drafts.decided .draft { opacity: .32; text-decoration: line-through; text-decoration-color: #f1e7d240; }
+  #drafts.decided .draft.won { opacity: 1; color: var(--paper); border-left: 1px solid var(--ember); text-decoration: none; font-size: 1.5rem; }
+  #drafts.decided .caret { display: none; }
   .w { animation: word .7s ease both; }
   .caret, #idle i {
     display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
@@ -163,6 +177,10 @@
     article.s-question { margin-top: 3.5rem; }
     article.s-question p { font-size: 1.6rem; }
     .aside { padding-left: 1rem; }
+    #drafts.on { display: block; }
+    #drafts .meta { padding: 0 0 .4rem; } #drafts .meta span { display: inline; margin-left: .6rem; }
+    .draft { font-size: 1.05rem; padding-left: 1.2rem; } #drafts.decided .draft.won { font-size: 1.28rem; }
+    #mind { opacity: .55; }
     #idle { padding-left: 1rem; }
     footer span:last-child { display: none; }
   }
@@ -172,6 +190,7 @@
 </style>
 </head>
 <body>
+<canvas id="mind" aria-hidden="true"></canvas>
 <header>
   <h1>minififty <small>one small mind, asking why</small></h1>
   <div id="stats" class="offline">
@@ -187,6 +206,7 @@
 <main>
   <div id="top"></div>
   <section id="log" aria-live="polite"></section>
+  <div id="drafts"><div class="meta"></div><div class="lines"></div></div>
   <div id="idle"><i></i><span id="phase">gathering the next thought</span></div>
 </main>
 
@@ -359,6 +379,56 @@ function endLive(thought) {
   idle.classList.add("on");
 }
 
+// ---- the drafts being weighed, live ------------------------------------
+const draftsEl = $("drafts");
+let draftKey = null, draftLines = [];
+
+function showDrafts(d) {
+  if (!d) { draftsEl.className = ""; draftKey = null; return; }
+  const stick = nearBottom();
+  const key = d.step + "|" + d.seed;
+  if (draftKey !== key || draftLines.length !== d.texts.length) {
+    draftKey = key;
+    draftsEl.querySelector(".meta").textContent = "weighing";
+    const sub = document.createElement("span");
+    sub.textContent = ROLES[d.step] || d.step;
+    draftsEl.querySelector(".meta").append(sub);
+    const lines = draftsEl.querySelector(".lines");
+    lines.textContent = "";
+    draftLines = d.texts.map((_, i) => {
+      const el = document.createElement("div");
+      el.className = "draft"; el.dataset.n = i + 1;
+      const seed = document.createElement("span"); seed.className = "seed";
+      const rest = document.createElement("span");
+      const caret = document.createElement("span"); caret.className = "caret";
+      el.append(seed, rest, caret);
+      lines.append(el);
+      return { el, seed, rest, shown: null };
+    });
+  }
+  d.texts.forEach((text, i) => {
+    const line = draftLines[i];
+    if (text === line.shown) return;
+    const hasSeed = d.step !== "question" && d.seed && text.startsWith(d.seed);
+    const body = hasSeed ? text.slice(d.seed.length) : text;
+    const before = line.shown === null ? null : (hasSeed ? line.shown.slice(d.seed.length) : line.shown);
+    line.seed.textContent = hasSeed ? d.seed : "";
+    if (before !== null && body.startsWith(before)) {
+      const w = document.createElement("span");
+      w.className = "w"; w.textContent = body.slice(before.length);
+      line.rest.append(w);
+    } else {
+      line.rest.textContent = body;
+    }
+    line.shown = text;
+    mind.touch(text);
+  });
+  draftsEl.className = "on" + (d.chosen != null ? " decided" : "");
+  draftLines.forEach((line, i) => line.el.classList.toggle("won", d.chosen === i));
+  idle.classList.remove("on");
+  if (stick) toBottom(false);
+}
+
 function setPhase(label) {
   const stick = nearBottom();
   $("phase").textContent = label || "gathering the next thought";
@@ -367,11 +437,20 @@ function setPhase(label) {
 
 function handle(ev) {
   switch (ev.type) {
-    case "start": startLive(ev.thought); break;
-    case "text": if (live && live.id === ev.id) updateLive(ev.text); break;
+    case "start": showDrafts(null); startLive(ev.thought); break;
+    case "text": if (live && live.id === ev.id) { updateLive(ev.text); mind.touch(ev.text); } break;
+    case "drafts": showDrafts(ev); break;
     case "end":
+      showDrafts(null);
+      mind.touch(ev.thought.text, 1.6);
+      if (ev.thought.step === "therefore") mind.load();
       if (live && live.id === ev.thought.id) endLive(ev.thought);
-      else if (!log.querySelector(`[data-id="${ev.thought.id}"]`)) log.append(build(ev.thought).el);
+      else if (!log.querySelector(`[data-id="${ev.thought.id}"]`)) {
+        const stick = nearBottom();
+        log.append(build(ev.thought).el);
+        idle.classList.add("on");
+        if (stick) toBottom(true);
+      }
       setStats(ev.stats);
       break;
     case "discard": if (live && live.id === ev.id) endLive(); break;
@@ -403,6 +482,7 @@ async function sync(snap) {
   setStats(snap.stats);
   setPhase(snap.phase);
   if (snap.current) startLive(snap.current); else idle.classList.add("on");
+  showDrafts(snap.drafting);
   toBottom(false);
   ready = true;
   pending.splice(0).forEach(handle);
@@ -432,6 +512,125 @@ new IntersectionObserver(es => { if (es[0].isIntersecting) loadOlder(); }, { roo
 
 addEventListener("scroll", () => jump.classList.toggle("on", !nearBottom()), { passive: true });
 jump.addEventListener("click", () => toBottom(true));
+
+// ---- the mind map: concepts it keeps returning to, and how it links them ----
+const mind = (() => {
+  const cv = $("mind"), ctx = cv.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const nodes = new Map();
+  let edges = [], W = 0, H = 0;
+  const norm = w => w.length > 4 && w.endsWith("ies") ? w.slice(0, -3) + "y"
+    : (w.length > 4 && w.endsWith("s") && !/(ss|us|is)$/.test(w) ? w.slice(0, -1) : w);
+
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (still) draw();
+  }
+
+  async function load() {
+    let g;
+    try { g = await (await fetch("/api/mind")).json(); } catch (e) { return; }
+    const keep = new Set(g.nodes.map(n => n.word));
+    for (const w of nodes.keys()) if (!keep.has(w)) nodes.delete(w);
+    for (const n of g.nodes) {
+      const old = nodes.get(n.word);
+      if (old) { if (n.count > old.count) old.heat = Math.max(old.heat, .8); old.count = n.count; continue; }
+      const side = Math.random() < .5 ? -1 : 1;   // new concepts drift in from the margins
+      nodes.set(n.word, { word: n.word, count: n.count, heat: 1, born: performance.now(), side,
+        x: W / 2 + side * (W * .34 + Math.random() * W * .14), y: H * (.15 + Math.random() * .7), vx: 0, vy: 0 });
+    }
+    edges = g.edges.map(e => ({ a: nodes.get(e.a), b: nodes.get(e.b), weight: e.weight })).filter(e => e.a && e.b);
+    if (still) { for (let i = 0; i < 300; i++) step(); draw(); }
+  }
+
+  // Light up the concepts that appear in what is being thought right now.
+  function touch(text, amount = 1) {
+    for (const w of (text.toLowerCase().match(/[a-z]{4,}/g) || [])) {
+      const n = nodes.get(norm(w));
+      if (n) n.heat = Math.max(n.heat, amount);
+    }
+  }
+
+  function step() {
+    const list = [...nodes.values()];
+    const column = W > 1150 ? 450 : 0;   // where there is room, concepts live in the margins beside the text
+    const home = column + (W / 2 - column) * .5;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        let dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy + 40;
+        const f = 700 / d2, d = Math.sqrt(d2);
+        dx /= d; dy /= d;
+        a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
+      }
+      a.vy += (H / 2 - a.y) * .0006;
+      if (column) {
+        a.vx += (W / 2 + a.side * home - a.x) * .004;   // each concept has a home margin
+        const off = a.x - W / 2;
+        if (Math.abs(off) < column) a.vx += a.side * (column - Math.abs(off)) * .03;
+      } else {
+        a.vx += (W / 2 - a.x) * .0004;
+      }
+      if (a.x < 50) a.vx += .3; if (a.x > W - 50) a.vx -= .3;
+      if (a.y < 90) a.vy += .3; if (a.y > H - 70) a.vy -= .3;
+    }
+    for (const e of edges) {
+      const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
+      if (column && e.a.side !== e.b.side) continue;   // links across the text are drawn but do not pull
+      const f = (d - 110) * .0007 * Math.min(e.weight, 4);
+      e.a.vx += dx / d * f; e.a.vy += dy / d * f; e.b.vx -= dx / d * f; e.b.vy -= dy / d * f;
+    }
+    const t = performance.now() / 1000;
+    for (const n of list) {
+      n.vx += Math.sin(t * .31 + n.word.length * 1.7) * .006;   // a slow drift, so it never sits still
+      n.vy += Math.cos(t * .27 + n.word.charCodeAt(0)) * .006;
+      n.vx *= .9; n.vy *= .9;
+      n.x += Math.max(-4, Math.min(4, n.vx)); n.y += Math.max(-4, Math.min(4, n.vy));
+      n.heat *= .988;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = W > 1150 ? 1 : .5;   // behind the text it has to stay quiet
+    const now = performance.now();
+    for (const e of edges) {
+      const heat = Math.min(e.a.heat, e.b.heat);
+      const age = Math.min(1, (now - Math.max(e.a.born, e.b.born)) / 2500);
+      ctx.strokeStyle = heat > .08
+        ? `rgba(239,122,60,${(.1 + heat * .5) * age})`
+        : `rgba(241,231,210,${(.035 + .02 * Math.min(e.weight, 5)) * age})`;
+      ctx.lineWidth = heat > .08 ? 1 : .6;
+      ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+    }
+    ctx.font = '300 10px "DM Mono", ui-monospace, monospace';
+    ctx.textBaseline = "middle";
+    for (const n of nodes.values()) {
+      const age = Math.min(1, (now - n.born) / 2500);
+      const r = 1.4 + Math.sqrt(n.count) * .7 + n.heat * 1.6;
+      if (n.heat > .05) {
+        ctx.fillStyle = `rgba(239,122,60,${n.heat * .18 * age})`;
+        ctx.beginPath(); ctx.arc(n.x, n.y, r * 4.5, 0, 6.3); ctx.fill();
+      }
+      ctx.fillStyle = n.heat > .08 ? `rgba(239,122,60,${(.45 + n.heat * .55) * age})` : `rgba(241,231,210,${.3 * age})`;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 6.3); ctx.fill();
+      ctx.fillStyle = `rgba(241,231,210,${(.2 + n.heat * .6) * age})`;
+      const label = n.word.toUpperCase().split("").join("\u200a");
+      ctx.textAlign = n.x > W - 150 ? "right" : "left";
+      ctx.fillText(label, n.x + (n.x > W - 150 ? -(r + 6) : r + 6), n.y);
+    }
+  }
+
+  function frame() { step(); draw(); requestAnimationFrame(frame); }
+  addEventListener("resize", resize);
+  resize(); load();
+  if (!still) requestAnimationFrame(frame);
+  return { load, touch };
+})();
 
 function connect() {
   const es = new EventSource("/api/stream");

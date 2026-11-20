@@ -16,6 +16,7 @@ Finished thoughts are appended to a JSONL file so the full history survives
 restarts; live progress is fanned out to every connected viewer.
 """
 import asyncio
+import copy
 import fcntl
 import json
 import random
@@ -61,7 +62,7 @@ FALLBACK_QUESTIONS = [
     "Why do we ask for a reason at all?",
     "What makes one life different from another?",
 ]
-QUESTION_OPENERS = ["Why does", "Why do we", "What does it mean", "How can", "But why", "If so, what", "What would", "Is"]
+QUESTION_OPENERS = ["Why does", "Why do we", "What does it mean", "How can", "But why", "What would", "Is", "Can a life"]
 
 # One inquiry = question, then these steps in order ("then" is sometimes skipped).
 STEPS = [
@@ -80,9 +81,39 @@ STEP_TOKENS = (10, 60)   # (stop at a sentence end after this many, hard cap)
 QUESTION_TOKENS = 32
 REFLECT_EVERY = 5        # every n-th inquiry returns to the root question
 RECALL = 3               # ...recalling this many earlier conclusions
-TOKEN_DELAY = 0.14       # seconds between tokens: a readable, contemplative pace
-STEP_PAUSE = 2.0         # silence between steps of one inquiry
+# Pacing when live. The drafts are shown to viewers while they are written.
+WORD_DELAY = 0.14        # per word when a fixed question is spoken
+DRAFT_STEP_MIN = 0.09    # minimum seconds per token while drafting, to stay readable
+CHOICE_PAUSE = 1.8       # how long the chosen draft is shown next to the rejected ones
+STEP_PAUSE = 1.2         # silence between steps of one inquiry
 INQUIRY_PAUSE = 6.0      # silence between inquiries
+
+# Words that carry no idea of their own; everything else is a concept in the mind map.
+STOPWORDS = set("""
+about above after again against allow almost along already also although always among another answer anyone anything
+around aspect because been before being believe below between beyond both came cannot come could does doing done down
+during each either else even ever every everything find first from further gave give given goes going gone good great
+have having hence here however indeed into itself just keep kind know known lead least less like little made make many
+maybe mean might more most much must need never next nothing often once only onto other others otherwise ours ourselves
+over part perhaps question rather really reason same seem seems shall should simply since some someone something still
+such take than that their them themselves then there therefore these they thing this those though through thus together
+true truly under unless until upon very want well were what whatever when where whether which while whom whose will
+with within without would your yourself hand follow mean means think thought itself aren didn doesn hasn haven wasn
+weren couldn shouldn wouldn able also back away sure every bring brings ways lives living live exist exists
+finding seen said says seeing looking look looks called
+""".split())
+
+
+def concept(word: str) -> str:
+    """Fold simple plurals so 'experiences' and 'experience' are one concept."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    return word[:-1] if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")) else word
+
+
+def concepts(text: str) -> set[str]:
+    words = set(re.findall(r"[a-z]{4,}", text.lower())) - STOPWORDS
+    return {concept(w) for w in words} - STOPWORDS
 
 _SENTENCE_END = re.compile(r"[.!?][\"”’')\]]*$")
 
@@ -116,11 +147,17 @@ class Thinker:
         self.chains = max((t.get("chain", 0) for t in self.history), default=0)
         self.current: dict | None = None
         self.phase = ""
+        self.drafting: dict | None = None   # the drafts being weighed right now
+        self._live = False
+        self._map_cache: tuple[int, dict] | None = None
         self.seq = 0
         self._lock = threading.Lock()
         self._subscribers: set[asyncio.Queue] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
+        self._echo = ""            # conclusions the current inquiry started from
+        self._kv = None            # attention cache of the prompt read so far...
+        self._kv_ids: list[int] = []  # ...and the tokens it covers
 
     # ---- drafting and weighing ----------------------------------------
 
@@ -132,30 +169,47 @@ class Thinker:
         )
 
     @torch.no_grad()
-    def _deliberate(self, prompt: str, said: str, seeds: list[str], min_tokens: int, max_tokens: int,
+    def _deliberate(self, role: str, prompt: str, said: str, seeds: list[str], min_tokens: int, max_tokens: int,
                     question: bool = False):
         """Draft CANDIDATES continuations side by side; return (best, the others).
 
         `prompt` is the chat prompt, `said` what the mind has already said in
         this chain, and the drafts all continue one opener picked from `seeds`.
         """
-        self._set_phase(f"weighing {CANDIDATES} possibilities")
         tok = self.tokenizer
         seed = random.choice(seeds)
+        with self._lock:
+            self.phase = f"weighing {CANDIDATES} possibilities"
+            self.drafting = {"step": role, "seed": seed, "texts": [seed] * CANDIDATES, "chosen": None}
+            self._publish({"type": "drafts", **self.drafting})
         lead = (said + " " if said else "") + seed
-        ids = tok(prompt + lead, return_tensors="pt", add_special_tokens=False).input_ids
+        ids = tok(prompt + lead, add_special_tokens=False).input_ids
         rows = [{"ids": [], "frames": [], "logp": 0.0, "text": "", "done": False, "complete": False}
                 for _ in range(CANDIDATES)]
-        inputs, past = ids.repeat(CANDIDATES, 1), None
+        # Read the prompt once, and only the part not already read for the
+        # previous step: within an inquiry the chain just grows at the end.
+        common = 0
+        while common < min(len(ids), len(self._kv_ids)) - 1 and ids[common] == self._kv_ids[common]:
+            common += 1
+        if self._kv is not None and common > 0:
+            if common < len(self._kv_ids):
+                self._kv.crop(common - len(self._kv_ids))  # negative: drop that many from the end
+        else:
+            self._kv, common = None, 0
+        out = self.model(input_ids=torch.tensor([ids[common:]]), past_key_values=self._kv, use_cache=True)
+        self._kv, self._kv_ids = out.past_key_values, ids
+        # The drafts branch off from that shared reading.
+        past = copy.deepcopy(self._kv)
+        past.batch_repeat_interleave(CANDIDATES)
+        logits_now = out.logits[:, -1].expand(CANDIDATES, -1)
         for _ in range(max_tokens):
-            out = self.model(input_ids=inputs, past_key_values=past, use_cache=True)
-            past = out.past_key_values
+            tick = time.time()
             step = []
             for b, row in enumerate(rows):
                 if row["done"]:
                     step.append(tok.eos_token_id)
                     continue
-                raw = out.logits[b, -1]
+                raw = logits_now[b]
                 logits = raw.clone()
                 for t in set(row["ids"][-48:]):  # discourage loops
                     logits[t] = logits[t] / REPETITION_PENALTY if logits[t] > 0 else logits[t] * REPETITION_PENALTY
@@ -182,18 +236,34 @@ class Thinker:
                         row["done"] = row["complete"] = True
                 elif len(row["ids"]) >= min_tokens and _SENTENCE_END.search(row["text"]):
                     row["done"] = row["complete"] = True
+            with self._lock:  # let everyone watch the drafts grow
+                self.drafting["texts"] = [row["text"] or seed for row in rows]
+                self._publish({"type": "drafts", **self.drafting})
             if all(row["done"] for row in rows):
                 break
-            inputs = torch.tensor(step).unsqueeze(1)
+            out = self.model(input_ids=torch.tensor(step).unsqueeze(1), past_key_values=past, use_cache=True)
+            past, logits_now = out.past_key_values, out.logits[:, -1]
+            if self._live:
+                time.sleep(max(0.0, DRAFT_STEP_MIN - (time.time() - tick)))
 
-        seen = set(re.findall(r"[a-z]{4,}", said.lower()))
-        drafts = [d for d in (self._judge(row, seed, seen, question) for row in rows) if d]
+        # Everything already said in this inquiry, plus the conclusions it started from.
+        before = re.findall(r"[a-z']+", (self._echo + " " + said).lower())
+        seen = ({w for w in before if len(w) >= 4}, {tuple(before[i:i + 4]) for i in range(len(before) - 3)})
+        judged = [self._judge(row, seed, seen, question) for row in rows]
         # Identical drafts are one draft.
-        unique = list({d["text"]: d for d in drafts}.values())
+        unique = list({d["text"]: d for d in reversed(judged) if d}.values())
         unique.sort(key=lambda d: d["score"], reverse=True)
-        return (unique[0], unique[1:]) if unique else (None, [])
+        if not unique:
+            return None, []
+        with self._lock:  # show which draft won before it becomes the thought
+            self.drafting["texts"] = [d["text"] if d else (rows[i]["text"] or seed) for i, d in enumerate(judged)]
+            self.drafting["chosen"] = judged.index(unique[0])
+            self._publish({"type": "drafts", **self.drafting})
+        if self._live:
+            time.sleep(CHOICE_PAUSE)
+        return unique[0], unique[1:]
 
-    def _judge(self, row: dict, seed: str, seen: set, question: bool):
+    def _judge(self, row: dict, seed: str, seen: tuple[set, set], question: bool):
         """Turn a raw draft into a scored candidate, or None if it is unusable."""
         text, complete, new_ids = row["text"], row["complete"], row["ids"]
         if not new_ids or (question and not complete):
@@ -224,17 +294,24 @@ class Thinker:
         words = re.findall(r"[a-z]{4,}", text[len(seed):].lower())
         if words:
             score -= 4.0 * (1 - len(set(words)) / len(words))
-            score -= 5.0 * max(0.0, sum(w in seen for w in words) / len(words) - 0.6)
+            score -= 6.0 * max(0.0, sum(w in seen[0] for w in words) / len(words) - 0.5)
+            said_words = re.findall(r"[a-z']+", text.lower())
+            echoes = sum(tuple(said_words[i:i + 4]) in seen[1] for i in range(len(said_words) - 3))
+            score -= min(8.0, 1.0 * echoes)  # repeating whole phrases is not a new thought
         else:
             score -= 2.0
         if not question and "?" in text:
             score -= 2.0
         if question:  # a real question about life, not "What is that?"
-            if len(text.split()) < 6:
+            if len(text.split()) < 7:
+                score -= 2.0
+            if re.search(r"\b(conclusion|question|statement)", text.lower()):  # talking about the task
                 score -= 2.0
             if not re.search(r"\b(li[fv]e|living|alive|exist|mean|purpose|death|die|dying)", text.lower()):
                 score -= 1.5
         if text.count("“") != text.count("”") or text.count('"') % 2 or ":" in text[-2:]:
+            score -= 1.5
+        if not question and ('"' in text or "“" in text):  # quoting itself instead of thinking
             score -= 1.5
         if re.search(r"\b(you|your|let me|here's|here is|step \d|(great|good|interesting) question|as (we|i)('ve| have)? (already )?discussed)\b", text.lower()):
             score -= 1.5
@@ -254,7 +331,7 @@ class Thinker:
     def _run(self):
         while True:
             try:
-                self.inquire(TOKEN_DELAY, STEP_PAUSE)
+                self.inquire(live=True)
             except Exception as exc:  # never let the mind die
                 print(f"[thinker] error: {exc!r}")
                 time.sleep(5)
@@ -264,8 +341,14 @@ class Thinker:
     def _conclusions(self) -> list[dict]:
         return [t for t in self.history if t.get("step") == "therefore" and t.get("model") == MODEL_TAG]
 
-    def inquire(self, delay: float = 0.0, pause: float = 0.0) -> list[dict]:
-        """Think one full chain: question -> steps -> conclusion."""
+    def inquire(self, live: bool = False) -> list[dict]:
+        """Think one full chain: question -> steps -> conclusion.
+
+        With `live` the pacing pauses apply; without, it runs as fast as it can.
+        """
+        self._live = live
+        delay = WORD_DELAY if live else 0.0
+        pause = STEP_PAUSE if live else 0.0
         chain = self.chains + 1
         conclusions = self._conclusions()
         last = conclusions[-1] if conclusions else None
@@ -275,10 +358,12 @@ class Thinker:
             note = f"a new mind continues from here · {MODEL_LABEL}"
 
         # 1. The question.
+        self._echo = last["text"] if last else ""
         question, rejected = None, []
         if last and chain % REFLECT_EVERY == 0 and len(conclusions) >= RECALL:
             # Reflection: back to the root question, with older conclusions in mind.
             recalls = sorted(random.sample(conclusions, RECALL), key=lambda t: t["id"])
+            self._echo = " ".join(t["text"] for t in recalls)
             text = random.choice(ROOT_QUESTIONS)
             task = ("Earlier I reached these conclusions:\n" + "\n".join(f"- {t['text']}" for t in recalls)
                     + f"\n\nWith these in mind, think again, step by step, about this question: {text}")
@@ -287,7 +372,7 @@ class Thinker:
             recalls = [last]
             ask = self._chat(f"I concluded: \"{last['text']}\"\n"
                              "Ask one short, deeper question about life that this conclusion raises.")
-            question, rejected = self._deliberate(ask, "", QUESTION_OPENERS, 0, QUESTION_TOKENS, True)
+            question, rejected = self._deliberate("question", ask, "", QUESTION_OPENERS, 0, QUESTION_TOKENS, True)
             text = question["text"] if question else random.choice(FALLBACK_QUESTIONS)
             task = f"Earlier I concluded: \"{last['text']}\"\n\nNow think through this question step by step: {text}"
         else:
@@ -295,7 +380,7 @@ class Thinker:
             task = f"Think through this question step by step: {text}"
         if question is None:
             words = text.split(" ")
-            question = {"text": text, "seed": "", "tokens": 0,
+            question = {"text": text, "seed": "", "tokens": 0, "spoken": True,
                         "frames": [" ".join(words[: i + 1]) for i in range(len(words))]}
         steps = [self._speak(chain, "question", question, rejected, delay, [t["id"] for t in recalls], note)]
 
@@ -306,7 +391,7 @@ class Thinker:
                 continue
             time.sleep(pause)
             said = " ".join(s["text"] for s in steps[1:])
-            best, rejected = self._deliberate(prompt, said, seeds, *STEP_TOKENS)
+            best, rejected = self._deliberate(role, prompt, said, seeds, *STEP_TOKENS)
             if best is None:
                 continue
             steps.append(self._speak(chain, role, best, rejected, delay))
@@ -328,15 +413,18 @@ class Thinker:
             thought["recalls"] = recalls
         if note:
             thought["note"] = note
-        with self._lock:
-            self.current = thought
-            self.phase = ""
-            self._publish({"type": "start", "thought": dict(thought)})
-        for frame in draft["frames"]:
+        if draft.get("spoken"):
+            # A fixed question nobody has seen yet: say it word by word.
             with self._lock:
-                thought["text"] = frame
-                self._publish({"type": "text", "id": thought["id"], "text": frame})
-            time.sleep(delay)
+                self.current = thought
+                self.phase = ""
+                self.drafting = None
+                self._publish({"type": "start", "thought": dict(thought)})
+            for frame in draft["frames"]:
+                with self._lock:
+                    thought["text"] = frame
+                    self._publish({"type": "text", "id": thought["id"], "text": frame})
+                time.sleep(delay)
         thought.update(text=draft["text"], tokens=draft["tokens"], done=time.time())
         if rejected:
             thought["rejected"] = [d["text"] for d in rejected]
@@ -346,6 +434,8 @@ class Thinker:
             self.history.append(thought)
             self.total_tokens += draft["tokens"]
             self.current = None
+            self.drafting = None
+            self.phase = ""
             if role == "question":
                 self.chains = max(self.chains, chain)
             self._publish({"type": "end", "thought": thought, "stats": self._stats()})
@@ -389,6 +479,7 @@ class Thinker:
                 "seq": self.seq,
                 "current": dict(self.current) if self.current else None,
                 "phase": self.phase,
+                "drafting": dict(self.drafting) if self.drafting else None,
                 "next_id": (self.history[-1]["id"] + 1) if self.history else 1,
                 "stats": self._stats(),
             }
@@ -410,6 +501,35 @@ class Thinker:
                 q.put_nowait(event)
             except asyncio.QueueFull:
                 pass
+
+    def mind_map(self, max_nodes: int = 34, max_edges: int = 60) -> dict:
+        """The concepts this mind keeps returning to and which of them it links.
+
+        A concept is a content word; two concepts are linked each time they
+        appear in the same thought. Only the current mind's thoughts count.
+        """
+        with self._lock:
+            if self._map_cache and self._map_cache[0] == len(self.history):
+                return self._map_cache[1]
+            texts = [t["text"] for t in self.history if t.get("model") == MODEL_TAG]
+            size = len(self.history)
+        counts: dict[str, int] = {}
+        pairs: dict[tuple[str, str], int] = {}
+        for text in texts:
+            found = sorted(concepts(text))
+            for w in found:
+                counts[w] = counts.get(w, 0) + 1
+            for i, a in enumerate(found):
+                for b in found[i + 1:]:
+                    pairs[(a, b)] = pairs.get((a, b), 0) + 1
+        top = sorted(counts, key=lambda w: (-counts[w], w))[:max_nodes]
+        keep = set(top)
+        links = sorted(((n, a, b) for (a, b), n in pairs.items() if a in keep and b in keep), reverse=True)[:max_edges]
+        result = {"nodes": [{"word": w, "count": counts[w]} for w in top],
+                  "edges": [{"a": a, "b": b, "weight": n} for n, a, b in links]}
+        with self._lock:
+            self._map_cache = (size, result)
+        return result
 
     def page(self, before: int | None, limit: int) -> list[dict]:
         """Up to `limit` finished thoughts with id < before, oldest first."""

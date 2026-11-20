@@ -47,6 +47,9 @@ visit — see the comment in `fly.toml` to keep it thinking around the clock.
     own probabilities (fluency plus how much the draft depends on the chain,
     minus penalties for circling and parroting). The rejected drafts are stored
     and shown on the page.
+    The drafts are streamed to viewers while they are written.
+  - **Concept map**: `/api/mind` returns the words the mind keeps returning to
+    and which of them co-occur in a thought; the page animates it in the background.
   - **Memory**: each conclusion raises the next question, and every fifth
     inquiry returns to the root question while recalling three older conclusions.
 

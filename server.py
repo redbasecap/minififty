@@ -44,6 +44,12 @@ async def history(before: int | None = None, limit: int = Query(100, ge=1, le=50
     return state["thinker"].page(before, limit)
 
 
+@app.get("/api/mind")
+async def mind():
+    """Concept map: the ideas the mind keeps returning to and how it links them."""
+    return state["thinker"].mind_map()
+
+
 def sse(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 

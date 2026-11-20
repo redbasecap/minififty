@@ -89,9 +89,10 @@
       <p>A model this small cannot reason by itself; it can only continue text. The thinking is a structure built around it:</p>
       <ol>
         <li><strong>Inquiries.</strong> Every line of thought opens with a question and moves through fixed steps to a conclusion. Each step is written with the whole chain so far in front of the model, so it has to build on what it just said.</li>
-        <li><strong>Deliberation.</strong> For every step the model silently writes three drafts and keeps the one that follows best from the chain, judged by its own probabilities. The two it set aside are kept: open “chosen from 3 drafts” under any thought to read them.</li>
+        <li><strong>Deliberation.</strong> For every step the model writes three drafts at once, in front of everyone, and keeps the one that follows best from the chain, judged by its own probabilities. The two it set aside are struck through and kept: open “chosen from 3 drafts” under any thought to read them.</li>
         <li><strong>Memory.</strong> Each conclusion raises the next question. Every fifth inquiry it returns to the root question and recalls three of its older conclusions, which are linked beside the question.</li>
       </ol>
+      <p>Behind the text drifts a <strong>map of its concepts</strong>: the words it keeps returning to, linked whenever two of them appear in the same thought. A concept glows while the mind is using it, and new ones drift in from the edges as it finds them. On small screens the map stays faint behind the text.</p>
       <p class="chain"><b>question</b> → perhaps → because → but → then → <b>∴ therefore</b> → next question</p>
     </div>
   </section>
