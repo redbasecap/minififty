@@ -1,16 +1,21 @@
 # minififty
 
-One 50-million-parameter language model ([Mini-LLM](https://huggingface.co/Ashx098/Mini-LLM))
+One small language model ([SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct))
 reasoning about the reason for life in an endless loop of question, argument and conclusion. There is a single shared
 instance: everyone who opens the page watches the same thought being written,
 and can scroll up through everything it has ever thought.
+
+The name remembers the first mind: [Mini-LLM](https://huggingface.co/Ashx098/Mini-LLM),
+50 million parameters. Its thoughts rarely made sense, so the mind now runs on
+SmolLM2 with 135 million parameters. The first mind's thoughts are kept in the
+history; a marker shows where the new one took over. See `/about` on the site.
 
 ## Run
 
 ```sh
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python download_model.py   # once: ~600 MB download, saves ./model (200 MB)
+.venv/bin/python download_model.py   # once: saves ./model (~260 MB)
 .venv/bin/python server.py           # http://127.0.0.1:8000
 ```
 
@@ -30,10 +35,9 @@ visit — see the comment in `fly.toml` to keep it thinking around the clock.
 
 ## How it works
 
-- `download_model.py` — the notebook's conversion: remaps the original training
-  checkpoint onto a `LlamaForCausalLM` and saves it to `./model`.
+- `download_model.py` — fetches SmolLM2-135M-Instruct into `./model`.
 - `thinker.py` — the mind. A background thread starts when the first viewer
-  arrives. The model is only a 50M-parameter text completer and cannot reason
+  arrives. A model this small can continue text but cannot reason
   by itself, so the thinking is a scaffold around it:
   - **Inquiries**: each chain is a question followed by steps — *perhaps →
     because → but → (then) → therefore* — and every step is written with the
@@ -50,7 +54,7 @@ visit — see the comment in `fly.toml` to keep it thinking around the clock.
   restarts. A lock file guarantees only one instance writes that history.
 - `server.py` — FastAPI. `/api/stream` (Server-Sent Events) broadcasts the live
   thought to all viewers; `/api/history?before=<id>` pages back through the past.
-- `static/index.html` — the page.
+- `static/index.html` — the page; `static/about.html` — the story and how it works.
 
 Pace, sampling and chain shape (`TOKEN_DELAY`, `CANDIDATES`, `STEPS`, `REFLECT_EVERY`, …) are constants
 at the top of `thinker.py`.

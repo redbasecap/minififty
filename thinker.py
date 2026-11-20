@@ -1,7 +1,7 @@
-"""The single, shared mind: one Mini-LLM instance thinking about life forever.
+"""The single, shared mind: one small language model thinking about life forever.
 
-The model itself is a 50M-parameter text completer; it cannot reason on its own.
-The thinking is a scaffold built around it:
+The model (SmolLM2-135M-Instruct) writes the sentences; the thinking is a
+scaffold built around it:
 
 * Inquiries (chains of thought). Each inquiry is a question followed by steps
   -- perhaps / because / but / then / therefore -- and every step is written
@@ -30,6 +30,16 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 ROOT = Path(__file__).parent
 MODEL_DIR = ROOT / "model"
 HISTORY_FILE = ROOT / "data" / "thoughts.jsonl"
+# Stamped on every thought. Thoughts without it came from the first mind
+# (Mini-LLM, 50M parameters) and are kept as history but not used as memory.
+MODEL_TAG = "smollm2-135m"
+MODEL_LABEL = "SmolLM2 · 135M parameters"
+
+SYSTEM = (
+    "You are a small, sincere mind thinking carefully about why life exists and what makes it meaningful. "
+    "You reason step by step in plain, clear sentences. Each step is one sentence that builds on the step before it. "
+    "You speak only for yourself, in the first person, and never address anyone."
+)
 
 ROOT_QUESTIONS = [
     "What is the reason for life?",
@@ -51,28 +61,23 @@ FALLBACK_QUESTIONS = [
     "Why do we ask for a reason at all?",
     "What makes one life different from another?",
 ]
-# Openers keep every question, first answer and conclusion tied to life itself,
-# otherwise the small model wanders off to whatever it last mentioned.
-QUESTION_OPENERS = ["But why does life", "Why do we live", "What does it mean to live", "If so, why are we alive",
-                    "How can a life", "And what is life if", "But why do living things", "Then what in life"]
+QUESTION_OPENERS = ["Why does", "Why do we", "What does it mean", "How can", "But why", "If so, what", "What would", "Is"]
 
 # One inquiry = question, then these steps in order ("then" is sometimes skipped).
 STEPS = [
-    ("perhaps", ["Perhaps life", "I think we live", "One answer is that life", "It may be that we are alive",
-                 "Maybe to be alive is", "Perhaps we exist"]),
+    ("perhaps", ["Perhaps", "I think", "One answer is that", "It may be that", "Maybe"]),
     ("because", ["This is because", "The reason is that", "I believe this because"]),
     ("but", ["But", "However,", "And yet", "On the other hand,"]),
     ("then", ["If that is true, then", "This means that", "It follows that"]),
-    ("therefore", ["Therefore, life", "So the reason for life is", "In the end, to live is",
-                   "And so we are alive because", "Therefore, the meaning of life is"]),
+    ("therefore", ["Therefore,", "So", "In the end,", "So the reason for life is"]),
 ]
 
-TEMPERATURE = 0.8
-TOP_P = 0.95
-REPETITION_PENALTY = 1.2
+TEMPERATURE = 0.7
+TOP_P = 0.9
+REPETITION_PENALTY = 1.15
 CANDIDATES = 3           # drafts weighed for every step
-STEP_TOKENS = (12, 55)   # (stop at a sentence end after this many, hard cap)
-QUESTION_TOKENS = 30
+STEP_TOKENS = (10, 60)   # (stop at a sentence end after this many, hard cap)
+QUESTION_TOKENS = 32
 REFLECT_EVERY = 5        # every n-th inquiry returns to the root question
 RECALL = 3               # ...recalling this many earlier conclusions
 TOKEN_DELAY = 0.14       # seconds between tokens: a readable, contemplative pace
@@ -83,11 +88,9 @@ _SENTENCE_END = re.compile(r"[.!?][\"”’')\]]*$")
 
 
 def tidy(text: str) -> str:
-    """Undo the WikiText-style spacing the model learned (" , " / " @-@ ")."""
-    text = re.sub(r" @([-.,])@ ", r"\1", text)
+    """Normalise stray spacing around punctuation."""
     text = re.sub(r" +([,.;:!?%)\]])", r"\1", text)
     text = re.sub(r"([(\[]) +", r"\1", text)
-    text = re.sub(r" +('(?:s|t|re|ve|ll|d|m)\b)", r"\1", text)
     text = re.sub(r"[ \t]+", " ", text)
     return text.replace("�", "")
 
@@ -121,101 +124,121 @@ class Thinker:
 
     # ---- drafting and weighing ----------------------------------------
 
-    @torch.no_grad()
-    def _draft(self, context: str, seed: str, min_tokens: int, max_tokens: int, question: bool = False):
-        """Sample one continuation of `seed` given `context`.
+    def _chat(self, user: str) -> str:
+        """The prompt up to the point where the mind starts to speak."""
+        return self.tokenizer.apply_chat_template(
+            [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
+            tokenize=False, add_generation_prompt=True,
+        )
 
-        Returns None if unusable, else a dict with the text, the frame-by-frame
-        text for replaying it live, and a score for how well it follows.
+    @torch.no_grad()
+    def _deliberate(self, prompt: str, said: str, seeds: list[str], min_tokens: int, max_tokens: int,
+                    question: bool = False):
+        """Draft CANDIDATES continuations side by side; return (best, the others).
+
+        `prompt` is the chat prompt, `said` what the mind has already said in
+        this chain, and the drafts all continue one opener picked from `seeds`.
         """
+        self._set_phase(f"weighing {CANDIDATES} possibilities")
         tok = self.tokenizer
-        ids = tok(context + seed, return_tensors="pt").input_ids
-        past, new_ids, frames, logp, text = None, [], [], 0.0, ""
-        inputs, complete = ids, False
+        seed = random.choice(seeds)
+        lead = (said + " " if said else "") + seed
+        ids = tok(prompt + lead, return_tensors="pt", add_special_tokens=False).input_ids
+        rows = [{"ids": [], "frames": [], "logp": 0.0, "text": "", "done": False, "complete": False}
+                for _ in range(CANDIDATES)]
+        inputs, past = ids.repeat(CANDIDATES, 1), None
         for _ in range(max_tokens):
             out = self.model(input_ids=inputs, past_key_values=past, use_cache=True)
             past = out.past_key_values
-            raw = out.logits[0, -1]
-            logits = raw.clone()
-            for t in set(new_ids[-48:]):  # discourage loops
-                logits[t] = logits[t] / REPETITION_PENALTY if logits[t] > 0 else logits[t] * REPETITION_PENALTY
-            probs = torch.softmax(logits / TEMPERATURE, dim=-1)
-            sorted_probs, sorted_idx = torch.sort(probs, descending=True)
-            keep = torch.cumsum(sorted_probs, dim=-1) - sorted_probs < TOP_P
-            sorted_probs = sorted_probs * keep
-            choice = sorted_idx[torch.multinomial(sorted_probs / sorted_probs.sum(), 1)].item()
-            if choice == tok.eos_token_id:
-                complete = not question and bool(new_ids) and bool(_SENTENCE_END.search(text))
+            step = []
+            for b, row in enumerate(rows):
+                if row["done"]:
+                    step.append(tok.eos_token_id)
+                    continue
+                raw = out.logits[b, -1]
+                logits = raw.clone()
+                for t in set(row["ids"][-48:]):  # discourage loops
+                    logits[t] = logits[t] / REPETITION_PENALTY if logits[t] > 0 else logits[t] * REPETITION_PENALTY
+                probs = torch.softmax(logits / TEMPERATURE, dim=-1)
+                sorted_probs, sorted_idx = torch.sort(probs, descending=True)
+                keep = torch.cumsum(sorted_probs, dim=-1) - sorted_probs < TOP_P
+                sorted_probs = sorted_probs * keep
+                choice = sorted_idx[torch.multinomial(sorted_probs / sorted_probs.sum(), 1)].item()
+                step.append(choice)
+                continuation = tok.decode(row["ids"] + [choice], skip_special_tokens=True)
+                if choice == tok.eos_token_id or "\n" in continuation.strip():
+                    row["done"] = True
+                    row["complete"] = not question and bool(_SENTENCE_END.search(row["text"]))
+                    continue
+                row["ids"].append(choice)
+                row["logp"] += torch.log_softmax(raw, dim=-1)[choice].item()
+                sep = "" if continuation[:1] in (" ", ",", ".", "'", "’", "?") or not continuation else " "
+                row["text"] = tidy(seed + sep + continuation).strip()
+                row["frames"].append(row["text"])
+                if question:
+                    if "?" in row["text"]:
+                        row["text"] = row["text"][: row["text"].index("?") + 1]
+                        row["frames"][-1] = row["text"]
+                        row["done"] = row["complete"] = True
+                elif len(row["ids"]) >= min_tokens and _SENTENCE_END.search(row["text"]):
+                    row["done"] = row["complete"] = True
+            if all(row["done"] for row in rows):
                 break
-            continuation = tok.decode(new_ids + [choice], skip_special_tokens=True)
-            if "\n" in continuation.strip():  # the model started a new paragraph
-                break
-            new_ids.append(choice)
-            logp += torch.log_softmax(raw, dim=-1)[choice].item()
-            inputs = torch.tensor([[choice]])
-            sep = "" if continuation[:1] in (" ", ",", ".", "'", "’", "?") or not continuation else " "
-            text = tidy(seed + sep + continuation).strip()
-            frames.append(text)
-            if question:
-                if "?" in text:
-                    text = text[: text.index("?") + 1]
-                    frames[-1] = text
-                    complete = True
-                    break
-            elif len(new_ids) >= min_tokens and _SENTENCE_END.search(text):
-                complete = True
-                break
+            inputs = torch.tensor(step).unsqueeze(1)
+
+        seen = set(re.findall(r"[a-z]{4,}", said.lower()))
+        drafts = [d for d in (self._judge(row, seed, seen, question) for row in rows) if d]
+        # Identical drafts are one draft.
+        unique = list({d["text"]: d for d in drafts}.values())
+        unique.sort(key=lambda d: d["score"], reverse=True)
+        return (unique[0], unique[1:]) if unique else (None, [])
+
+    def _judge(self, row: dict, seed: str, seen: set, question: bool):
+        """Turn a raw draft into a scored candidate, or None if it is unusable."""
+        text, complete, new_ids = row["text"], row["complete"], row["ids"]
         if not new_ids or (question and not complete):
             return None
+        frames = row["frames"]
         if not complete:
             # Ran out of budget mid-sentence: fall back to the last full sentence.
             ends = [m.end() for m in re.finditer(r"[.!?][\"”’')\]]*(?= |$)", text)]
             if ends and ends[-1] > len(seed) + 20:
-                text = text[: ends[-1]]
-                complete = True
+                text, complete = text[: ends[-1]], True
             else:
-                text = text.rstrip(" ,;:") + "…"
-            frames.append(text)
+                text = text.rstrip(" ,;:-–—") + "…"
+            frames = frames + [text]
 
         # How much does this draft depend on the chain before it?  Compare its
-        # probability given the chain with its probability given nothing.
-        n = len(new_ids)
-        alone = tok(seed, return_tensors="pt").input_ids
+        # probability given the whole prompt with its probability given nothing.
+        tok, n = self.tokenizer, len(new_ids)
+        alone = tok(seed, return_tensors="pt", add_special_tokens=False).input_ids
         full = torch.cat([alone, torch.tensor([new_ids])], dim=1)
         lp = torch.log_softmax(self.model(input_ids=full).logits[0], dim=-1)
         start = alone.shape[1]
         logp_alone = sum(lp[start + i - 1, t].item() for i, t in enumerate(new_ids))
-        fluency = logp / n
-        relevance = (logp - logp_alone) / n
-        score = fluency + relevance + 0.02 * min(n, 30) - (0.0 if complete else 1.5)
-        # Guard against the model's favourite failures: going in circles,
-        # parroting the chain, and "concluding" with a question.
+        fluency = row["logp"] / n
+        relevance = (row["logp"] - logp_alone) / n
+        score = fluency + relevance + 0.02 * min(n, 30) - (0.0 if complete else 2.0)
+        # Guard against the usual failures: going in circles, parroting the
+        # chain, "concluding" with a question, and slipping into chat manners.
         words = re.findall(r"[a-z]{4,}", text[len(seed):].lower())
         if words:
             score -= 4.0 * (1 - len(set(words)) / len(words))
-            seen = set(re.findall(r"[a-z]{4,}", context.lower()))
             score -= 5.0 * max(0.0, sum(w in seen for w in words) / len(words) - 0.6)
         else:
             score -= 2.0
-        if not question and text.endswith("?"):
+        if not question and "?" in text:
             score -= 2.0
-        if text.count("“") != text.count("”") or text.count('"') % 2 or "(" in text or ")" in text:
+        if question:  # a real question about life, not "What is that?"
+            if len(text.split()) < 6:
+                score -= 2.0
+            if not re.search(r"\b(li[fv]e|living|alive|exist|mean|purpose|death|die|dying)", text.lower()):
+                score -= 1.5
+        if text.count("“") != text.count("”") or text.count('"') % 2 or ":" in text[-2:]:
             score -= 1.5
-        return {"text": text, "frames": frames, "tokens": n, "score": score,
-                "fluency": fluency, "relevance": relevance}
-
-    def _deliberate(self, context: str, seeds: list[str], min_tokens: int, max_tokens: int, question=False):
-        """Draft CANDIDATES continuations and return (best, the others)."""
-        self._set_phase(f"weighing {CANDIDATES} possibilities")
-        drafts = []
-        for _ in range(CANDIDATES):
-            seed = random.choice(seeds)
-            draft = self._draft(context, seed, min_tokens, max_tokens, question)
-            if draft:
-                draft["seed"] = seed
-                drafts.append(draft)
-        drafts.sort(key=lambda d: d["score"], reverse=True)
-        return (drafts[0], drafts[1:]) if drafts else (None, [])
+        if re.search(r"\b(you|your|let me|here's|here is|step \d|(great|good|interesting) question|as (we|i)('ve| have)? (already )?discussed)\b", text.lower()):
+            score -= 1.5
+        return {"text": text, "frames": frames, "tokens": n, "score": score, "seed": seed}
 
     # ---- the endless loop ---------------------------------------------
 
@@ -239,7 +262,7 @@ class Thinker:
             time.sleep(INQUIRY_PAUSE)
 
     def _conclusions(self) -> list[dict]:
-        return [t for t in self.history if t.get("step") == "therefore"]
+        return [t for t in self.history if t.get("step") == "therefore" and t.get("model") == MODEL_TAG]
 
     def inquire(self, delay: float = 0.0, pause: float = 0.0) -> list[dict]:
         """Think one full chain: question -> steps -> conclusion."""
@@ -247,47 +270,55 @@ class Thinker:
         conclusions = self._conclusions()
         last = conclusions[-1] if conclusions else None
         recalls: list[dict] = []
-        memory = ""
+        note = None
+        if self.history and self.history[-1].get("model") != MODEL_TAG:
+            note = f"a new mind continues from here · {MODEL_LABEL}"
 
         # 1. The question.
         question, rejected = None, []
         if last and chain % REFLECT_EVERY == 0 and len(conclusions) >= RECALL:
             # Reflection: back to the root question, with older conclusions in mind.
             recalls = sorted(random.sample(conclusions, RECALL), key=lambda t: t["id"])
-            memory = " ".join(t["text"] for t in recalls) + "\n\n"
             text = random.choice(ROOT_QUESTIONS)
+            task = ("Earlier I reached these conclusions:\n" + "\n".join(f"- {t['text']}" for t in recalls)
+                    + f"\n\nWith these in mind, think again, step by step, about this question: {text}")
         elif last:
             # The last conclusion raises the next question.
-            memory = last["text"] + "\n\n"
             recalls = [last]
-            question, rejected = self._deliberate(last["text"] + " ", QUESTION_OPENERS, 0, QUESTION_TOKENS, True)
+            ask = self._chat(f"I concluded: \"{last['text']}\"\n"
+                             "Ask one short, deeper question about life that this conclusion raises.")
+            question, rejected = self._deliberate(ask, "", QUESTION_OPENERS, 0, QUESTION_TOKENS, True)
             text = question["text"] if question else random.choice(FALLBACK_QUESTIONS)
+            task = f"Earlier I concluded: \"{last['text']}\"\n\nNow think through this question step by step: {text}"
         else:
             text = ROOT_QUESTIONS[0]
+            task = f"Think through this question step by step: {text}"
         if question is None:
             words = text.split(" ")
             question = {"text": text, "seed": "", "tokens": 0,
                         "frames": [" ".join(words[: i + 1]) for i in range(len(words))]}
-        steps = [self._speak(chain, "question", question, rejected, delay, [t["id"] for t in recalls])]
+        steps = [self._speak(chain, "question", question, rejected, delay, [t["id"] for t in recalls], note)]
 
         # 2. The reasoning, each step seeing the whole chain so far.
+        prompt = self._chat(task)
         for role, seeds in STEPS:
             if role == "then" and random.random() < 0.5:
                 continue
             time.sleep(pause)
-            context = memory + " ".join(s["text"] for s in steps) + " "
-            best, rejected = self._deliberate(context, seeds, *STEP_TOKENS)
+            said = " ".join(s["text"] for s in steps[1:])
+            best, rejected = self._deliberate(prompt, said, seeds, *STEP_TOKENS)
             if best is None:
                 continue
             steps.append(self._speak(chain, role, best, rejected, delay))
         self.chains = chain
         return steps
 
-    def _speak(self, chain, role, draft, rejected, delay, recalls=None) -> dict:
+    def _speak(self, chain, role, draft, rejected, delay, recalls=None, note=None) -> dict:
         """Say the chosen draft aloud, token by token, then commit it to history."""
         thought = {
             "id": (self.history[-1]["id"] + 1) if self.history else 1,
             "ts": time.time(),
+            "model": MODEL_TAG,
             "chain": chain,
             "step": role,
             "seed": draft["seed"],
@@ -295,6 +326,8 @@ class Thinker:
         }
         if recalls:
             thought["recalls"] = recalls
+        if note:
+            thought["note"] = note
         with self._lock:
             self.current = thought
             self.phase = ""

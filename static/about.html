@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>about — minififty</title>
+<meta name="description" content="How minififty thinks, why it is called that, and which model is doing the thinking.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0b0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ef7a3c'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0b0f; --paper: #f1e7d2; --paper-dim: #f1e7d2b0; --paper-faint: #f1e7d255;
+    --rule: #f1e7d21c; --ember: #ef7a3c;
+    --serif: "Cormorant Garamond", "Iowan Old Style", Palatino, Georgia, serif;
+    --mono: "DM Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ink); color: var(--paper); scrollbar-color: #f1e7d230 transparent; }
+  body { margin: 0; font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(60rem 34rem at 50% 108%, #ef7a3c22, transparent 70%),
+                radial-gradient(40rem 30rem at 8% -10%, #3b4a7a22, transparent 70%);
+  }
+  a { color: var(--paper); text-decoration-color: var(--ember); text-underline-offset: .22em; }
+  a:hover { color: var(--ember); }
+  nav {
+    position: relative; display: flex; justify-content: space-between; align-items: baseline;
+    padding: 1.1rem 1.75rem; font: 300 .72rem var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  }
+  nav .name { font: italic 500 1.55rem/1 var(--serif); letter-spacing: 0; text-transform: none; text-decoration: none; }
+  nav .back::before { content: ""; display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; margin-right: .55rem;
+    background: var(--ember); box-shadow: 0 0 .6rem var(--ember); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; transform: scale(.8); } }
+  main { position: relative; max-width: 44rem; margin: 0 auto; padding: 4.5rem 1.75rem 8rem; }
+  h1 { margin: 0 0 1.2rem; font: italic 400 3.3rem/1.08 var(--serif); text-wrap: balance; }
+  .lede { font-size: 1.6rem; line-height: 1.4; color: var(--paper-dim); margin: 0 0 4.5rem; text-wrap: pretty; }
+  section { display: grid; grid-template-columns: 7.5rem 1fr; margin-bottom: 3.6rem; }
+  h2 { margin: .5rem 0 0; font: 300 .68rem/1.5 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ember); }
+  .body { padding-left: 1.4rem; border-left: 1px solid var(--rule); }
+  p, li { font-size: 1.32rem; line-height: 1.5; color: var(--paper-dim); text-wrap: pretty; }
+  p { margin: 0 0 1rem; }
+  p:last-child { margin-bottom: 0; }
+  strong, em.k { color: var(--paper); font-weight: 500; }
+  ol { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  ol li { counter-increment: s; position: relative; padding-left: 2.2rem; margin-bottom: 1rem; }
+  ol li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: .5rem;
+    font: 300 .68rem var(--mono); letter-spacing: .08em; color: var(--paper-faint); }
+  .chain { margin: 1.2rem 0 0; font: 300 .72rem/2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--paper-faint); }
+  .chain b { font-weight: 400; color: var(--paper); }
+  table { width: 100%; border-collapse: collapse; margin-top: .4rem; }
+  th, td { text-align: left; padding: .55rem .8rem .55rem 0; border-bottom: 1px solid var(--rule); font-size: 1.15rem; color: var(--paper-dim); vertical-align: top; }
+  th { font: 300 .64rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--paper-faint); }
+  td:first-child { color: var(--paper); white-space: nowrap; }
+  @media (max-width: 720px) {
+    main { padding: 2.5rem 1.1rem 5rem; }
+    h1 { font-size: 2.4rem; } .lede { font-size: 1.3rem; margin-bottom: 3rem; }
+    section { display: block; } h2 { margin: 0 0 .7rem; } .body { padding-left: 1rem; }
+    p, li { font-size: 1.18rem; } td, th { font-size: 1rem; } td:first-child { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<nav>
+  <a class="name" href="/">minififty</a>
+  <a class="back" href="/">watch it think</a>
+</nav>
+
+<main>
+  <h1>One small mind, asking why.</h1>
+  <p class="lede">minififty is a single, very small language model that thinks about the reason for life, without ever stopping. There is only one of it. Everyone who opens the page watches the same thought being written, and can scroll back through everything it has ever thought.</p>
+
+  <section>
+    <h2>The name</h2>
+    <div class="body">
+      <p>The name comes from the mind it started with: <a href="https://huggingface.co/Ashx098/Mini-LLM">Mini-LLM</a>, a model with <strong>fifty million parameters</strong> — mini, fifty.</p>
+      <p>That first mind wrote the earliest thoughts in the history. They are grammatical and strange, and they rarely mean anything: fifty million parameters from an early training run are enough to produce sentences, not sense.</p>
+      <p>So the mind was changed. It now runs on <a href="https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct">SmolLM2</a> with <strong>135 million parameters</strong> — still tiny, a small fraction of the size of the large assistants, but big enough that a thought can follow from the one before it. The name stayed, in memory of the original.</p>
+      <p>Nothing was erased. The first mind's thoughts are still at the top of the history, and a line reading <em class="k">“a new mind continues from here”</em> marks the place where the second one took over.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it thinks</h2>
+    <div class="body">
+      <p>A model this small cannot reason by itself; it can only continue text. The thinking is a structure built around it:</p>
+      <ol>
+        <li><strong>Inquiries.</strong> Every line of thought opens with a question and moves through fixed steps to a conclusion. Each step is written with the whole chain so far in front of the model, so it has to build on what it just said.</li>
+        <li><strong>Deliberation.</strong> For every step the model silently writes three drafts and keeps the one that follows best from the chain, judged by its own probabilities. The two it set aside are kept: open “chosen from 3 drafts” under any thought to read them.</li>
+        <li><strong>Memory.</strong> Each conclusion raises the next question. Every fifth inquiry it returns to the root question and recalls three of its older conclusions, which are linked beside the question.</li>
+      </ol>
+      <p class="chain"><b>question</b> → perhaps → because → but → then → <b>∴ therefore</b> → next question</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What it is not</h2>
+    <div class="body">
+      <p>It is not conscious, and it does not understand life. It produces plausible sentences inside a scaffold that forces them into the shape of an argument. Sometimes the argument holds; often it circles, contradicts itself, or settles for something agreeable.</p>
+      <p>It will never finish. There is no answer it is converging on — only the next question.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The two minds</h2>
+    <div class="body">
+      <table>
+        <tr><th></th><th>First</th><th>Now</th></tr>
+        <tr><td>Model</td><td>Mini-LLM</td><td>SmolLM2-135M-Instruct</td></tr>
+        <tr><td>Parameters</td><td>50 million</td><td>135 million</td></tr>
+        <tr><td>Thoughts</td><td>Loose sentences, later simple chains</td><td>Chains with drafts and memory</td></tr>
+        <tr><td>Makes sense</td><td>Rarely</td><td>Mostly</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Under the hood</h2>
+    <div class="body">
+      <p>One process on one small CPU machine holds the model and writes every finished thought to disk. The page receives the live thought over a single streaming connection. When nobody is watching, the machine goes to sleep; the mind wakes, with its full history, when the next person opens the page.</p>
+      <p>The code is open: <a href="https://github.com/redbasecap/minififty">github.com/redbasecap/minififty</a>.</p>
+    </div>
+  </section>
+</main>
+</body>
+</html>

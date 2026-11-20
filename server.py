@@ -33,6 +33,11 @@ async def index():
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/about")
+async def about():
+    return FileResponse(STATIC / "about.html", headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/api/history")
 async def history(before: int | None = None, limit: int = Query(100, ge=1, le=500)):
     """Finished thoughts older than `before` (newest page if omitted), oldest first."""

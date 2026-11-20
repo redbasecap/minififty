@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>minififty — a small mind thinking about life</title>
-<meta name="description" content="One 50-million-parameter language model, thinking about the reason for life in an endless loop. Everyone watches the same mind.">
+<meta name="description" content="One small language model, reasoning about the reason for life in an endless loop. Everyone watches the same mind.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0b0f'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ef7a3c'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -111,6 +111,10 @@
   .aside a:hover { color: var(--ember); }
   .recall { text-transform: uppercase; }
   article.flash p { color: var(--paper); border-left-color: var(--ember); transition: none; }
+  .note { grid-column: 1 / -1; margin: 0 0 3rem; padding: .9rem 0; border-block: 1px solid var(--rule); text-align: center;
+    font: 300 .68rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ember); }
+  header a, footer a { color: inherit; text-underline-offset: .25em; pointer-events: auto; }
+  header a:hover, footer a:hover { color: var(--ember); }
   .w { animation: word .7s ease both; }
   .caret, #idle i {
     display: inline-block; width: .5rem; height: .5rem; border-radius: 50%;
@@ -176,6 +180,7 @@
     <span class="hide-s">inquiries <b id="s-inquiries">—</b></span>
     <span class="hide-s">awake <b id="s-since">—</b></span>
     <span>watching <b id="s-viewers">—</b></span>
+    <a href="/about">about</a>
   </div>
 </header>
 
@@ -187,7 +192,7 @@
 
 <button id="jump" type="button">↓ back to the present</button>
 <footer>
-  <span>mini-llm · 50,049,408 parameters · a single shared instance</span>
+  <span>SmolLM2 · 135M parameters · a single shared instance · <a href="/about">about this mind</a></span>
   <span>question → perhaps → because → but → therefore · scroll up for everything it has ever thought</span>
 </footer>
 
@@ -289,6 +294,11 @@ function build(thought) {
     const role = document.createElement("span");
     role.className = "role"; role.textContent = ROLES[thought.step];
     meta.append(role);
+  }
+  if (thought.note) {
+    const note = document.createElement("div");
+    note.className = "note"; note.textContent = thought.note;
+    el.append(note);
   }
   const body = document.createElement("div");
   const p = document.createElement("p");
