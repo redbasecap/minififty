@@ -1,5 +1,7 @@
 # minififty
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/redbasecap)
+
 One small language model ([SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct))
 reasoning about the reason for life in an endless loop of question, argument and conclusion. There is a single shared
 instance: everyone who opens the page watches the same thought being written,
